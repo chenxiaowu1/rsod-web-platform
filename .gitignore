@@ -1,43 +1,31 @@
 # ==================================
-# Python 后端相关
+# 敏感配置（含 API Key、密码）
+# ==================================
+.env
+*.env
+!.env.example
+
+# ==================================
+# Python
 # ==================================
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
+.eggs/
+dist/
+build/
 *.egg
-MANIFEST
 
 # 虚拟环境
-.env
-.venv
-env/
+.venv/
 venv/
-ENV/
-
-# 日志文件
-*.log
-logs/
+env/
 
 # ==================================
-# AI模型与数据相关（必须过滤！）
+# AI 模型文件（太大，单独下载）
 # ==================================
-# 模型权重文件
 *.pt
 *.pth
 *.onnx
@@ -45,40 +33,55 @@ logs/
 *.trt
 *.weights
 *.ckpt
+*.bin
+*.safetensors
 
 # 数据集
 data/
 dataset/
 datasets/
 
-# 运行结果
+# 训练运行结果
 runs/
-static/annotated/
-static/videos/
-static/original/
-quarantine/
 
 # ==================================
-# Vue 前端相关
+# 运行时生成的文件（不上传）
+# ==================================
+# 检测历史记录
+history/
+
+# 用户上传 & 检测结果
+static/uploads/
+static/results/
+backend/static/uploads/
+backend/static/results/
+
+# 日志
+*.log
+logs/
+
+# ==================================
+# 前端
 # ==================================
 node_modules/
-.DS_Store
 dist/
 dist-ssr/
 *.local
 .npmrc
 
-# 编辑器临时文件
-.vscode/*
-!.vscode/extensions.json
-!.vscode/settings.json
+# ==================================
+# IDE & 编辑器
+# ==================================
 .idea/
+.vscode/
 *.iml
-*.iws
-*.ipr
 *.swp
+*.swo
 .sublime-*
 
-# 系统文件
+# ==================================
+# 系统 & 杂项
+# ==================================
 Thumbs.db
 .DS_Store
+.claude/
