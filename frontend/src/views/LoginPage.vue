@@ -46,23 +46,36 @@
 
 <script setup>
 import { ref, reactive } from "vue";
+import { ElMessage } from "element-plus";
 import { User, Lock } from "@element-plus/icons-vue";
 import { useRouter } from "vue-router";
+import { loginUser, getSession } from "../utils/auth";
 
 const router = useRouter();
+
+// 已登录则跳过
+if (getSession()) {
+  router.replace("/detection");
+}
+
 const loginForm = reactive({ username: "", password: "", remember: false });
 const loginFormRef = ref(null);
 
 const loginRules = {
-  username: [{ required: true, message: "请输入用户名", trigger: "blur" }, { min: 3, max: 20, message: "3-20 个字符", trigger: "blur" }],
-  password: [{ required: true, message: "请输入密码", trigger: "blur" }, { min: 6, max: 30, message: "6-30 个字符", trigger: "blur" }],
+  username: [{ required: true, message: "请输入用户名", trigger: "blur" }],
+  password: [{ required: true, message: "请输入密码", trigger: "blur" }],
 };
 
 const handleLogin = () => {
   loginFormRef.value.validate((valid) => {
     if (valid) {
-      localStorage.setItem("token", "mock-token");
-      router.push("/detection");
+      const result = loginUser(loginForm.username, loginForm.password);
+      if (result.success) {
+        ElMessage.success(`欢迎回来，${result.user.username}`);
+        router.push("/detection");
+      } else {
+        ElMessage.error(result.message);
+      }
     }
   });
 };

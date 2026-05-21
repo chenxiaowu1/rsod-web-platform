@@ -19,7 +19,7 @@ def _ensure_dir():
 
 
 def save_record(detection_result, image_url: str, result_image_url: str,
-                filename: str, model_name: str) -> dict:
+                filename: str, model_name: str, username: str = "") -> dict:
     """保存一条检测记录，返回 record dict"""
     _ensure_dir()
 
@@ -28,6 +28,7 @@ def save_record(detection_result, image_url: str, result_image_url: str,
     record = {
         "id": record_id,
         "detection_id": record_id,
+        "username": username,
         "filename": filename,
         "image_url": image_url,
         "result_image_url": result_image_url,
@@ -46,7 +47,8 @@ def save_record(detection_result, image_url: str, result_image_url: str,
 
 
 def list_records(page: int = 1, page_size: int = 10,
-                 keyword: str = "", status: str = "") -> tuple[list[dict], int]:
+                 keyword: str = "", status: str = "",
+                 username: str = "") -> tuple[list[dict], int]:
     """分页查询记录，返回 (records, total)"""
     _ensure_dir()
 
@@ -63,6 +65,9 @@ def list_records(page: int = 1, page_size: int = 10,
         except Exception:
             continue
 
+        # 用户隔离
+        if username and r.get("username", "") != username:
+            continue
         # 筛选
         if keyword and keyword.lower() not in r.get("filename", "").lower():
             continue

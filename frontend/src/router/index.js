@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
+import { getSession } from "../utils/auth";
 
 const routes = [
   {
@@ -53,12 +54,17 @@ const router = createRouter({
 });
 
 router.beforeEach((to, from, next) => {
-  const token = localStorage.getItem("token");
+  const session = getSession();
   const authPaths = ["/login", "/register", "/forgot-password"];
-  
+
   if (authPaths.includes(to.path)) {
-    next();
-  } else if (!token) {
+    // 已登录用户访问登录/注册页 → 跳转检测页
+    if (session && (to.path === "/login" || to.path === "/register")) {
+      next("/detection");
+    } else {
+      next();
+    }
+  } else if (!session) {
     next("/login");
   } else {
     next();

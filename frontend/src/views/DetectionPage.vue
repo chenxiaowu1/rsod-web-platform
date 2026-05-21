@@ -34,7 +34,7 @@
           :ref="el => fileInputs[tab.key] = el"
           type="file"
           :accept="tab.accept"
-          :multiple="tab.key !== 'single' && tab.key !== 'video'"
+          :multiple="tab.key !== 'single'"
           :webkitdirectory="tab.key === 'folder' ? true : undefined"
           class="file-input"
           @click="activeTab = tab.key"
@@ -73,6 +73,15 @@
               <div v-else class="placeholder"><el-icon :size="40"><Aim /></el-icon><span>检测结果</span></div>
               <div class="image-label result-label">检测结果</div>
               <div v-if="singleResult" class="detection-badge">{{ singleResult.total_objects }}</div>
+              <el-button
+                v-if="singleResultImg"
+                class="download-btn"
+                size="small"
+                circle
+                @click.stop="downloadResult(singleResultImg)"
+              >
+                <el-icon :size="16"><Download /></el-icon>
+              </el-button>
             </div>
           </div>
         </div>
@@ -99,12 +108,12 @@
 
       <!-- ====== 批量 / 文件夹模式 ====== -->
       <template v-else>
-        <div class="batch-panel">
+        <div class="left-panel">
           <!-- 顶部状态栏 -->
-          <div class="batch-topbar">
-            <span class="batch-label">
+          <div class="panel-topbar">
+            <span class="panel-label">
               {{ activeTab === 'batch' ? '批量检测' : '文件夹检测' }}
-              <span class="batch-count">共 {{ batchFiles.length }} 张</span>
+              <span class="panel-count">共 {{ batchFiles.length }} 张</span>
             </span>
             <div class="panel-status">
               <span v-if="batchLoading" class="status processing">
@@ -152,6 +161,20 @@
             <div class="info-row"><span class="info-label">检测耗时</span><span class="info-value mono">{{ selectedBatchItem.detection_time || '-' }}s</span></div>
             <div class="info-row"><span class="info-label">检测数量</span><span class="info-value mono">{{ selectedBatchItem.total_objects || 0 }}</span></div>
           </div>
+
+          <!-- 结果图预览 -->
+          <div class="batch-result-img-wrap" v-if="selectedBatchItem.result_url">
+            <img :src="selectedBatchItem.result_url" class="batch-result-img" />
+            <el-button
+              class="batch-download-btn"
+              size="small"
+              circle
+              @click.stop="downloadResult(selectedBatchItem.result_url)"
+            >
+              <el-icon :size="16"><Download /></el-icon>
+            </el-button>
+          </div>
+
           <div class="result-card">
             <div class="card-header"><span class="card-title">识别清单</span><span v-if="selectedBatchItem.boxes" class="card-badge">{{ selectedBatchItem.boxes.length }}</span></div>
             <div v-if="selectedBatchItem.boxes && selectedBatchItem.boxes.length" class="box-list">
@@ -174,7 +197,7 @@
 import { ref, reactive, onMounted } from "vue";
 import { ElMessage } from "element-plus";
 import { detectSingleImage, getModels, switchModel } from "../api/detection";
-import { Picture, Aim, Plus, Folder, Monitor, Refresh, FolderOpened } from "@element-plus/icons-vue";
+import { Picture, Aim, Plus, Folder, Refresh, FolderOpened, Download } from "@element-plus/icons-vue";
 
 const selectedModel = ref("yolo11m-obb");
 const availableModels = ref([]);
@@ -195,10 +218,9 @@ const batchTotalTime = ref(0);
 const batchSelectedIdx = ref(-1);
 
 const functionTabs = [
-  { key: "single", name: "单图检测", desc: "快速识别单张影像", icon: Picture, accept: "image/*", multiple: false },
-  { key: "batch", name: "批量检测", desc: "一次处理多张影像", icon: Plus, accept: "image/*", multiple: true },
-  { key: "folder", name: "文件夹", desc: "上传整个文件夹", icon: Folder, accept: "image/*", multiple: true },
-  { key: "video", name: "视频检测", desc: "上传视频自动分析", icon: Monitor, accept: "video/*", multiple: false },
+  { key: "single", name: "单图检测", desc: "识别单张遥感影像", icon: Picture, accept: "image/*" },
+  { key: "batch", name: "批量检测", desc: "一次处理多张影像", icon: Plus, accept: "image/*" },
+  { key: "folder", name: "文件夹", desc: "上传整个文件夹", icon: Folder, accept: "image/*" },
 ];
 
 const selectedBatchItem = ref(null);
@@ -238,6 +260,24 @@ const resetSingle = () => {
   singleOriginal.value = "";
   singleResultImg.value = "";
   singleResult.value = null;
+};
+
+const downloadResult = async (url) => {
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = `detection_result_${Date.now()}.jpg`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+    ElMessage.success("下载成功");
+  } catch (e) {
+    ElMessage.error("下载失败");
+  }
 };
 
 // ── 批量 ──
@@ -376,6 +416,7 @@ const resetBatch = () => {
 }
 .panel-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
 .panel-label { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+.panel-count { font-size: 12px; color: var(--text-muted); margin-left: 8px; font-weight: 400; }
 .panel-status .status { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .status .status-dot { width: 6px; height: 6px; border-radius: 50%; }
 .status.processing .status-dot { background: var(--warning); animation: pulse 1.5s ease-in-out infinite; }
@@ -393,11 +434,12 @@ const resetBatch = () => {
 .placeholder { display: flex; flex-direction: column; align-items: center; gap: 10px; color: var(--text-muted); font-size: 13px; }
 .image-label {
   position: absolute; top: 10px; left: 10px;
-  padding: 3px 8px; background: rgba(0,0,0,0.7); color: var(--text-primary);
-  font-size: 10px; font-weight: 700; letter-spacing: 1px; border-radius: 3px;
+  padding: 4px 10px; background: rgba(0,0,0,0.85); color: #fff;
+  font-size: 11px; font-weight: 700; letter-spacing: 1px; border-radius: 4px;
   font-family: var(--mono);
+  backdrop-filter: blur(4px);
 }
-.result-label { color: var(--accent); }
+.result-label { color: var(--accent); background: rgba(0,0,0,0.9); }
 .detection-badge {
   position: absolute; top: 10px; right: 10px;
   width: 32px; height: 32px; border-radius: 50%;
@@ -405,6 +447,15 @@ const resetBatch = () => {
   display: flex; align-items: center; justify-content: center;
   box-shadow: 0 0 12px var(--accent-glow);
 }
+
+.download-btn {
+  position: absolute; bottom: 12px; right: 12px;
+  background: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+  color: var(--accent) !important;
+  opacity: 0; transition: opacity 0.2s;
+}
+.image-card:hover .download-btn { opacity: 1; }
 
 .right-panel { width: 320px; display: flex; flex-direction: column; gap: 14px; flex-shrink: 0; }
 
@@ -437,15 +488,7 @@ const resetBatch = () => {
 
 .reset-btn { width: 100%; height: 40px; border-radius: var(--radius-md); }
 
-/* ── 批量 ── */
-.batch-panel {
-  flex: 1; background: var(--bg-card); border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg); padding: 20px; display: flex; flex-direction: column; overflow: hidden;
-}
-.batch-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-shrink: 0; }
-.batch-label { font-size: 14px; font-weight: 600; color: var(--text-primary); }
-.batch-count { font-size: 12px; color: var(--text-muted); margin-left: 8px; font-weight: 400; }
-
+/* ── 批量网格 ── */
 .batch-grid {
   flex: 1; overflow-y: auto; display: grid;
   grid-template-columns: repeat(4, 1fr); gap: 10px;
@@ -491,6 +534,21 @@ const resetBatch = () => {
   border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* 批量结果图 */
+.batch-result-img-wrap {
+  position: relative; border-radius: var(--radius-md); overflow: hidden;
+  border: 1px solid var(--border-color);
+}
+.batch-result-img { width: 100%; display: block; max-height: 200px; object-fit: cover; }
+.batch-download-btn {
+  position: absolute; bottom: 8px; right: 8px;
+  background: var(--bg-card) !important;
+  border-color: var(--border-color) !important;
+  color: var(--accent) !important;
+  opacity: 0; transition: opacity 0.2s;
+}
+.batch-result-img-wrap:hover .batch-download-btn { opacity: 1; }
 
 .batch-empty {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;

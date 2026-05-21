@@ -38,7 +38,7 @@
 
         <div class="agree-row">
           <el-checkbox v-model="registerForm.agree" />
-          <span>我已阅读并同意 <a href="#">《服务条款》</a> 和 <a href="#">《隐私政策》</a></span>
+          <span>我已阅读并同意服务条款和隐私政策</span>
         </div>
 
         <el-button type="primary" size="large" class="register-btn" @click="handleRegister">注 册</el-button>
@@ -51,8 +51,10 @@
 
 <script setup>
 import { ref, reactive } from "vue";
+import { ElMessage } from "element-plus";
 import { User, Message, Lock } from "@element-plus/icons-vue";
 import { useRouter } from "vue-router";
+import { registerUser, loginUser } from "../utils/auth";
 
 const router = useRouter();
 const registerForm = reactive({ username: "", email: "", password: "", confirmPassword: "", agree: false });
@@ -66,14 +68,20 @@ const registerRules = {
     { required: true, message: "请确认密码", trigger: "blur" },
     { validator: (_, v, cb) => v !== registerForm.password ? cb(new Error("两次密码不一致")) : cb(), trigger: "blur" },
   ],
-  agree: [{ validator: (_, v, cb) => !v ? cb(new Error("请同意服务条款")) : cb(), trigger: "change" }],
+  agree: [{ validator: (_, v, cb) => !v ? cb(new Error("请勾选同意")) : cb(), trigger: "change" }],
 };
 
 const handleRegister = () => {
   registerFormRef.value.validate((valid) => {
     if (valid) {
-      localStorage.setItem("token", "mock-token");
-      router.push("/detection");
+      const result = registerUser(registerForm.username, registerForm.email, registerForm.password);
+      if (result.success) {
+        ElMessage.success("注册成功，正在登录...");
+        loginUser(registerForm.username, registerForm.password);
+        router.push("/detection");
+      } else {
+        ElMessage.error(result.message);
+      }
     }
   });
 };

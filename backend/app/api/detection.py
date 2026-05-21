@@ -20,7 +20,8 @@ ensure_directories()
 @router.post("/single", response_model=SingleDetectionResponse)
 async def detect_single_image(
     file: UploadFile = File(...),
-    model_name: str = Form("pest-v1")
+    model_name: str = Form("pest-v1"),
+    username: str = Form(""),
 ):
     try:
         filename = await save_upload_file(file, settings.UPLOAD_DIR)
@@ -28,10 +29,9 @@ async def detect_single_image(
 
         result = detection_service.detect_single_image(image_path, model_name)
 
-        # 自动保存到历史记录
         image_url = get_file_url(filename, "static/uploads")
         result_image_url = result.result_image_url
-        save_record(result, image_url, result_image_url, filename, model_name)
+        save_record(result, image_url, result_image_url, filename, model_name, username)
 
         return SingleDetectionResponse(
             success=True,
@@ -46,6 +46,7 @@ async def detect_single_image(
 async def detect_batch_images(
     files: list[UploadFile] = File(...),
     model_name: str = Form("pest-v1"),
+    username: str = Form(""),
 ):
     """
     批量检测多张图片
@@ -84,7 +85,7 @@ async def detect_batch_images(
                 created_at=datetime.now(),
             )
             save_record(fake_result, item["image_url"], item["result_image_url"],
-                        saved_files[i], model_name)
+                        saved_files[i], model_name, username)
         except Exception:
             pass
 
@@ -108,8 +109,9 @@ async def get_history(
     page_size: int = Query(10, ge=1, le=100),
     keyword: str = Query("", description="搜索关键词"),
     status: str = Query("", description="状态筛选: completed / failed"),
+    username: str = Query(""),
 ):
-    records, total = list_records(page, page_size, keyword, status)
+    records, total = list_records(page, page_size, keyword, status, username=username)
     return HistoryListResponse(
         success=True,
         message="获取成功",

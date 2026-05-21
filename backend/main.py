@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.api.detection import router as detection_router
 from app.api.qa import router as qa_router
+from app.api.user import router as user_router
 from app.utils.file_utils import ensure_directories
 
 ensure_directories()
@@ -26,6 +27,7 @@ app.mount("/static", StaticFiles(directory=settings.STATIC_DIR), name="static")
 
 app.include_router(detection_router, prefix="/api")
 app.include_router(qa_router, prefix="/api")
+app.include_router(user_router, prefix="/api")
 
 
 @app.get("/")

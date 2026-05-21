@@ -71,6 +71,14 @@ export const switchModel = (modelKey) => {
   })
 }
 
+// ── 用户中心 ──────────────────────────────────────
+export const getUserProfile = () => {
+  return request({
+    url: '/user/profile',
+    method: 'get'
+  })
+}
+
 // ── AI 问答 ──────────────────────────────────────
 export const askQuestion = (data) => {
   return request({
