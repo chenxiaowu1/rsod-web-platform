@@ -80,8 +80,20 @@ dist-ssr/
 .sublime-*
 
 # ==================================
+# 引擎运行时（上传/输出/临时文件）
+# ==================================
+engines/*/uploads/
+engines/*/outputs/
+engines/*/temp/
+
+# 变化检测临时输出
+backend/static/cd_temp/
+
+# ==================================
 # 系统 & 杂项
 # ==================================
 Thumbs.db
 .DS_Store
 .claude/
+*.zip
+*.tar.gz

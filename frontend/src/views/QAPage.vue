@@ -56,6 +56,7 @@
 import { ref, nextTick, watch } from "vue";
 import { ElMessage } from "element-plus";
 import { ChatDotRound, User, Promotion } from "@element-plus/icons-vue";
+import { requireLogin } from "../utils/request";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
 
@@ -82,6 +83,7 @@ const scrollToBottom = async () => {
 const sendMessage = async () => {
   const text = question.value.trim();
   if (!text || streaming.value) return;
+  if (!(await requireLogin())) return;
   messages.value.push({ role: "user", content: text });
   question.value = "";
   streamContent.value = "";

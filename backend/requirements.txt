@@ -41,6 +41,9 @@ minio>=7.2.0
 # Ultralytics YOLO框架（包含PyTorch）
 ultralytics>=8.0.0
 
+# 地理影像处理 (GeoTIFF / COG 等)
+rasterio>=1.3.0
+
 # OpenCV图像处理库
 opencv-python>=4.8.0
 
@@ -63,3 +66,8 @@ aiofiles>=23.2.0
 # HTTP 客户端（AI 问答调用 LLM API）
 # =============================================================================
 httpx>=0.27.0
+
+# JWT 认证
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+bcrypt==4.0.1

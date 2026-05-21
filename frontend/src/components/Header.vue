@@ -14,17 +14,17 @@
         </el-button>
       </el-tooltip>
 
-      <div class="user-section" @click="goProfile">
+      <div class="user-section" @click="handleUserClick">
         <el-avatar class="user-avatar" :size="32">
           <el-icon :size="18"><User /></el-icon>
         </el-avatar>
         <div class="user-info">
           <span class="user-name">{{ displayName }}</span>
-          <span class="user-role">普通用户</span>
+          <span class="user-role">{{ loggedIn ? '已登录' : '点击登录' }}</span>
         </div>
       </div>
 
-      <el-tooltip content="退出登录" placement="bottom">
+      <el-tooltip v-if="loggedIn" content="退出登录" placement="bottom">
         <el-button class="logout-btn" size="small" circle @click="handleLogout">
           <el-icon :size="16"><SwitchButton /></el-icon>
         </el-button>
@@ -40,17 +40,25 @@ import { ElMessageBox } from "element-plus";
 import { User, Sunny, Moon, SwitchButton } from "@element-plus/icons-vue";
 import { getSession, logoutUser } from "../utils/auth";
 
+const emit = defineEmits(["openLogin"]);
+
 const route = useRoute();
 const router = useRouter();
 const isDark = ref(true);
 const THEME_KEY = "rsod-theme";
 
-const session = getSession();
-const displayName = session ? session.username : "Lily";
+const loggedIn = computed(() => !!getSession());
+const displayName = computed(() => {
+  const s = getSession();
+  return s ? s.username : "未登录";
+});
 
 const pageNames = {
   "/detection": "智能检测",
+  "/change-detection": "变化检测",
+  "/video": "视频流检测",
   "/history": "历史记录",
+  "/statistics": "检测统计",
   "/qa": "AI 问答",
   "/targets": "目标库",
   "/profile": "个人中心",
@@ -64,17 +72,21 @@ const applyTheme = (dark) => {
 };
 const toggleTheme = () => applyTheme(!isDark.value);
 
-const goProfile = () => router.push("/profile");
+const handleUserClick = () => {
+  if (loggedIn.value) {
+    router.push("/profile");
+  } else {
+    emit("openLogin");
+  }
+};
 
 const handleLogout = async () => {
   try {
     await ElMessageBox.confirm("确定要退出登录吗？", "退出登录", {
-      confirmButtonText: "退出",
-      cancelButtonText: "取消",
-      type: "warning",
+      confirmButtonText: "退出", cancelButtonText: "取消", type: "warning",
     });
     logoutUser();
-    router.push("/login");
+    router.push("/detection");
   } catch (e) { /* cancelled */ }
 };
 

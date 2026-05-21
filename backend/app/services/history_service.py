@@ -1,99 +1,260 @@
 """
-检测历史记录 — 文件存储服务
-
-每条检测记录保存为 history/{record_id}.json
+检测历史记录 — PostgreSQL 存储服务
 """
 
-import os
-import json
-import uuid
-import glob
-from datetime import datetime
 from typing import Optional
-
-HISTORY_DIR = "history"
-
-
-def _ensure_dir():
-    os.makedirs(HISTORY_DIR, exist_ok=True)
+from sqlalchemy import desc
+from app.database import SessionLocal
+from app.models.db_models import DetectionRecord, ChangeDetectionRecord, VideoRecord
 
 
 def save_record(detection_result, image_url: str, result_image_url: str,
-                filename: str, model_name: str, username: str = "") -> dict:
-    """保存一条检测记录，返回 record dict"""
-    _ensure_dir()
-
-    record_id = detection_result.detection_id
-    boxes_data = [b.model_dump() if hasattr(b, 'model_dump') else b for b in detection_result.boxes]
-    record = {
-        "id": record_id,
-        "detection_id": record_id,
-        "username": username,
-        "filename": filename,
-        "image_url": image_url,
-        "result_image_url": result_image_url,
-        "type": "single",
-        "status": "completed",
-        "created_at": detection_result.created_at.isoformat(),
-        "total_objects": detection_result.total_objects,
-        "detected_classes": list(set(b.class_name for b in detection_result.boxes)),
-        "detection_time": detection_result.detection_time,
-        "model_name": model_name,
-        "boxes": boxes_data,
-    }
-    with open(os.path.join(HISTORY_DIR, f"{record_id}.json"), "w", encoding="utf-8") as f:
-        json.dump(record, f, ensure_ascii=False, indent=2)
-    return record
+                filename: str, model_name: str, username: str = "",
+                user_id: int = 0) -> dict:
+    """保存一条检测记录到 PostgreSQL"""
+    db = SessionLocal()
+    try:
+        boxes_data = [
+            b.model_dump() if hasattr(b, 'model_dump') else b
+            for b in detection_result.boxes
+        ]
+        record = DetectionRecord(
+            id=detection_result.detection_id,
+            user_id=user_id,
+            username=username,
+            filename=filename,
+            image_url=image_url,
+            result_image_url=result_image_url,
+            record_type="single",
+            status="completed",
+            total_objects=detection_result.total_objects,
+            detected_classes=list(set(b.class_name for b in detection_result.boxes)),
+            detection_time=detection_result.detection_time,
+            model_name=model_name,
+            boxes=boxes_data,
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return record.to_dict()
+    finally:
+        db.close()
 
 
 def list_records(page: int = 1, page_size: int = 10,
                  keyword: str = "", status: str = "",
                  username: str = "") -> tuple[list[dict], int]:
-    """分页查询记录，返回 (records, total)"""
-    _ensure_dir()
+    """分页查询记录"""
+    db = SessionLocal()
+    try:
+        q = db.query(DetectionRecord)
+        if username:
+            q = q.filter(DetectionRecord.username == username)
+        if keyword:
+            q = q.filter(DetectionRecord.filename.ilike(f"%{keyword}%"))
+        if status:
+            q = q.filter(DetectionRecord.status == status)
 
-    files = sorted(
-        glob.glob(os.path.join(HISTORY_DIR, "*.json")),
-        key=os.path.getmtime,
-        reverse=True,
-    )
-    all_records = []
-    for fp in files:
-        try:
-            with open(fp, "r", encoding="utf-8") as f:
-                r = json.load(f)
-        except Exception:
-            continue
-
-        # 用户隔离
-        if username and r.get("username", "") != username:
-            continue
-        # 筛选
-        if keyword and keyword.lower() not in r.get("filename", "").lower():
-            continue
-        if status and r.get("status", "") != status:
-            continue
-        all_records.append(r)
-
-    total = len(all_records)
-    start = (page - 1) * page_size
-    end = start + page_size
-    return all_records[start:end], total
+        total = q.count()
+        records = (
+            q.order_by(desc(DetectionRecord.created_at))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+        return [r.to_dict() for r in records], total
+    finally:
+        db.close()
 
 
 def get_record(record_id: str) -> Optional[dict]:
     """获取单条记录"""
-    fp = os.path.join(HISTORY_DIR, f"{record_id}.json")
-    if not os.path.exists(fp):
-        return None
-    with open(fp, "r", encoding="utf-8") as f:
-        return json.load(f)
+    db = SessionLocal()
+    try:
+        record = db.query(DetectionRecord).filter(DetectionRecord.id == record_id).first()
+        return record.to_dict() if record else None
+    finally:
+        db.close()
+
+
+def get_all_records(username: str = "") -> list[dict]:
+    """获取全部记录 (不分页), 用于统计"""
+    db = SessionLocal()
+    try:
+        q = db.query(DetectionRecord)
+        if username:
+            q = q.filter(DetectionRecord.username == username)
+        records = q.order_by(desc(DetectionRecord.created_at)).all()
+        return [r.to_dict() for r in records]
+    finally:
+        db.close()
 
 
 def delete_record(record_id: str) -> bool:
     """删除单条记录"""
-    fp = os.path.join(HISTORY_DIR, f"{record_id}.json")
-    if not os.path.exists(fp):
-        return False
-    os.remove(fp)
-    return True
+    db = SessionLocal()
+    try:
+        record = db.query(DetectionRecord).filter(DetectionRecord.id == record_id).first()
+        if not record:
+            return False
+        db.delete(record)
+        db.commit()
+        return True
+    finally:
+        db.close()
+
+
+# ── 变化检测记录 ───────────────────────────────
+
+def save_cd_record(detection_id: str, user_id: int, username: str,
+                   filename_a: str, filename_b: str,
+                   image_a_url: str, image_b_url: str, result_url: str,
+                   change_ratio: float, detection_time: float,
+                   model_name: str) -> dict:
+    db = SessionLocal()
+    try:
+        record = ChangeDetectionRecord(
+            id=detection_id,
+            user_id=user_id,
+            username=username,
+            filename_a=filename_a,
+            filename_b=filename_b,
+            image_a_url=image_a_url,
+            image_b_url=image_b_url,
+            result_url=result_url,
+            record_type="single",
+            status="completed",
+            change_ratio=change_ratio,
+            detection_time=detection_time,
+            model_name=model_name,
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return record.to_dict()
+    finally:
+        db.close()
+
+
+def list_cd_records(page: int = 1, page_size: int = 10,
+                    username: str = "") -> tuple[list[dict], int]:
+    db = SessionLocal()
+    try:
+        q = db.query(ChangeDetectionRecord)
+        if username:
+            q = q.filter(ChangeDetectionRecord.username == username)
+        total = q.count()
+        records = (
+            q.order_by(desc(ChangeDetectionRecord.created_at))
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+            .all()
+        )
+        return [r.to_dict() for r in records], total
+    finally:
+        db.close()
+
+
+def get_cd_record(record_id: str):
+    db = SessionLocal()
+    try:
+        record = db.query(ChangeDetectionRecord).filter(
+            ChangeDetectionRecord.id == record_id).first()
+        return record.to_dict() if record else None
+    finally:
+        db.close()
+
+
+def delete_cd_record(record_id: str) -> bool:
+    db = SessionLocal()
+    try:
+        record = db.query(ChangeDetectionRecord).filter(
+            ChangeDetectionRecord.id == record_id).first()
+        if not record:
+            return False
+        db.delete(record)
+        db.commit()
+        return True
+    finally:
+        db.close()
+
+
+def get_all_cd_records(username: str = "") -> list[dict]:
+    db = SessionLocal()
+    try:
+        q = db.query(ChangeDetectionRecord)
+        if username:
+            q = q.filter(ChangeDetectionRecord.username == username)
+        return [r.to_dict() for r in q.order_by(desc(ChangeDetectionRecord.created_at)).all()]
+    finally:
+        db.close()
+
+
+# ── 视频记录 ─────────────────────────────────
+
+def save_video_record(video_id: str, user_id: int, username: str,
+                      filename: str, total_frames: int, total_objects: int,
+                      detection_time: float, fps_original: float,
+                      model_name: str) -> dict:
+    db = SessionLocal()
+    try:
+        record = VideoRecord(
+            id=video_id, user_id=user_id, username=username,
+            filename=filename, total_frames=total_frames,
+            total_objects=total_objects, detection_time=detection_time,
+            fps_original=fps_original, model_name=model_name,
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        return record.to_dict()
+    finally:
+        db.close()
+
+
+def list_video_records(page: int = 1, page_size: int = 10,
+                       username: str = "") -> tuple[list[dict], int]:
+    db = SessionLocal()
+    try:
+        q = db.query(VideoRecord)
+        if username:
+            q = q.filter(VideoRecord.username == username)
+        total = q.count()
+        records = q.order_by(desc(VideoRecord.created_at)).offset(
+            (page - 1) * page_size).limit(page_size).all()
+        return [r.to_dict() for r in records], total
+    finally:
+        db.close()
+
+
+def get_video_record(record_id: str):
+    db = SessionLocal()
+    try:
+        r = db.query(VideoRecord).filter(VideoRecord.id == record_id).first()
+        return r.to_dict() if r else None
+    finally:
+        db.close()
+
+
+def get_all_video_records(username: str = "") -> list[dict]:
+    db = SessionLocal()
+    try:
+        q = db.query(VideoRecord)
+        if username:
+            q = q.filter(VideoRecord.username == username)
+        return [r.to_dict() for r in q.order_by(desc(VideoRecord.created_at)).all()]
+    finally:
+        db.close()
+
+
+def delete_video_record(record_id: str) -> bool:
+    db = SessionLocal()
+    try:
+        r = db.query(VideoRecord).filter(VideoRecord.id == record_id).first()
+        if not r:
+            return False
+        db.delete(r)
+        db.commit()
+        return True
+    finally:
+        db.close()

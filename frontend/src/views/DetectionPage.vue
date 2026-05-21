@@ -6,46 +6,94 @@
         <p class="page-subtitle">上传遥感影像，立即识别多类目标</p>
       </div>
       <div class="header-right">
-        <el-select v-model="selectedModel" class="model-select" @change="onModelChange">
-          <el-option
-            v-for="m in availableModels"
-            :key="m.key"
-            :label="m.display"
-            :value="m.key"
-          >
-            <div class="model-option">
-              <span class="model-opt-name">{{ m.display }}</span>
-              <span class="model-opt-desc">{{ m.desc }}</span>
-            </div>
-          </el-option>
-        </el-select>
+        <div class="model-config-box">
+          <span class="config-label">模型配置</span>
+          <div class="config-controls">
+            <el-popover placement="bottom" :width="280" trigger="hover">
+              <template #reference>
+                <div class="sahi-toggle" @click="useSahi = !useSahi" :class="{ on: useSahi }">
+                  <span class="sahi-dot"></span>
+                  <span class="sahi-label">SAHI 切片</span>
+                </div>
+              </template>
+              <div class="sahi-explain">
+                <p><strong>SAHI 切片推理</strong> — 将大图切成 640×640 小块逐块检测后合并。</p>
+                <p style="margin-top:6px"><span class="tag-rec">推荐开启</span> 影像边长 > 2000px，切片推理提升小目标检出率</p>
+                <p style="margin-top:4px"><span class="tag-off">建议关闭</span> 影像边长 ≤ 2000px，标准推理即可</p>
+              </div>
+            </el-popover>
+            <el-select v-model="selectedModel" class="model-select" @change="onModelChange">
+              <el-option
+                v-for="m in availableModels"
+                :key="m.key"
+                :label="m.display"
+                :value="m.key"
+              >
+                <div class="model-option">
+                  <span class="model-opt-name">{{ m.display }}</span>
+                  <span class="model-opt-desc">{{ m.desc }}</span>
+                </div>
+              </el-option>
+            </el-select>
+          </div>
+        </div>
       </div>
     </div>
 
-    <!-- 功能选项卡 -->
+    <!-- 阈值调节 -->
+    <div class="threshold-bar">
+      <div class="threshold-item">
+        <span class="threshold-label">置信度阈值</span>
+        <el-slider v-model="confThreshold" :min="0.1" :max="0.9" :step="0.05" :show-tooltip="true" class="threshold-slider" />
+        <span class="threshold-value">{{ confThreshold.toFixed(2) }}</span>
+      </div>
+      <div class="threshold-item">
+        <span class="threshold-label">IoU 阈值</span>
+        <el-slider v-model="iouThreshold" :min="0.1" :max="0.9" :step="0.05" :show-tooltip="true" class="threshold-slider" />
+        <span class="threshold-value">{{ iouThreshold.toFixed(2) }}</span>
+      </div>
+    </div>
+
+    <!-- 模式切换 -->
     <div class="function-tabs">
       <div
         v-for="tab in functionTabs"
         :key="tab.key"
         class="function-tab"
         :class="{ active: activeTab === tab.key }"
+        @click="activeTab = tab.key"
       >
-        <input
-          :ref="el => fileInputs[tab.key] = el"
-          type="file"
-          :accept="tab.accept"
-          :multiple="tab.key !== 'single'"
-          :webkitdirectory="tab.key === 'folder' ? true : undefined"
-          class="file-input"
-          @click="activeTab = tab.key"
-          @change.stop="(e) => handleFileChange(e, tab.key)"
-        />
         <el-icon :size="20" class="tab-icon"><component :is="tab.icon" /></el-icon>
         <div class="tab-content">
           <span class="tab-text">{{ tab.name }}</span>
           <span class="tab-desc">{{ tab.desc }}</span>
         </div>
       </div>
+    </div>
+
+    <!-- 上传区域 -->
+    <div class="upload-zone" v-if="activeTab === 'single'" @click="$refs.singleInput.click()">
+      <input ref="singleInput" type="file" :accept="functionTabs[0].accept" class="hidden-input" @change.stop="(e) => handleFileChange(e, 'single')" />
+      <el-icon :size="28"><Picture /></el-icon>
+      <span class="upload-text">点击此处上传遥感影像</span>
+      <span class="upload-hint">支持 JPG / PNG / TIF / TIFF</span>
+    </div>
+    <div class="upload-zone" v-if="activeTab === 'batch'" @click="$refs.folderInput.click()">
+      <input ref="folderInput" type="file" :accept="functionTabs[1].accept" webkitdirectory class="hidden-input" @change.stop="(e) => handleFileChange(e, 'batch')" />
+      <el-icon :size="28"><FolderOpened /></el-icon>
+      <span class="upload-text">点击此处上传整个文件夹</span>
+      <span class="upload-hint">支持 JPG / PNG / TIF / TIFF</span>
+    </div>
+
+    <!-- 下载栏 -->
+    <div class="download-bar" v-if="(activeTab === 'single' && singleResult) || (activeTab === 'batch' && batchDone > 0)">
+      <span class="download-bar-label">结果图下载</span>
+      <el-button v-if="activeTab === 'single' && singleResultImg" size="small" type="primary" @click="downloadResult(singleResultImg)">
+        <el-icon :size="14"><Download /></el-icon> 下载结果图
+      </el-button>
+      <el-button v-if="activeTab === 'batch' && batchDone > 0" size="small" type="primary" @click="downloadAllResults">
+        <el-icon :size="14"><Download /></el-icon> 下载全部结果图 ({{ batchDone }} 张 · ZIP)
+      </el-button>
     </div>
 
     <!-- 主内容区域 -->
@@ -56,13 +104,16 @@
         <div class="left-panel">
           <div class="panel-topbar">
             <span class="panel-label">检测预览</span>
-            <div class="panel-status">
+            <div class="panel-status" style="display:flex;align-items:center;gap:10px">
               <span v-if="loading" class="status processing"><span class="status-dot"></span>检测中...</span>
               <span v-else-if="singleResult" class="status done"><span class="status-dot"></span>检测完成</span>
               <span v-else class="status idle"><span class="status-dot"></span>等待上传</span>
+              <el-button v-if="singleResult || singleOriginal" size="small" @click="resetSingle" circle><el-icon :size="14"><Close /></el-icon></el-button>
             </div>
           </div>
-          <div class="image-compare-single">
+
+          <!-- 有内容：显示原图+结果图对比 -->
+          <div class="image-compare-single" v-if="singleResult || singleOriginal">
             <div class="image-card">
               <img v-if="singleOriginal" :src="singleOriginal" class="compare-image" />
               <div v-else class="placeholder"><el-icon :size="40"><Picture /></el-icon><span>原始图片</span></div>
@@ -84,13 +135,27 @@
               </el-button>
             </div>
           </div>
+
+          <!-- 空状态 -->
+          <div v-else class="batch-empty">
+            <el-icon :size="48"><Picture /></el-icon>
+            <p>点击上方「单图检测」上传遥感影像进行检测</p>
+          </div>
         </div>
 
-        <div class="right-panel">
+        <div class="right-panel" v-if="singleResult || singleOriginal">
           <div class="info-card">
             <div class="info-row"><span class="info-label">检测模型</span><span class="info-value accent">{{ selectedModel }}</span></div>
             <div class="info-row"><span class="info-label">检测耗时</span><span class="info-value mono">{{ singleResult?.detection_time || '-' }}s</span></div>
             <div class="info-row"><span class="info-label">检测数量</span><span class="info-value mono">{{ singleResult?.total_objects || 0 }}</span></div>
+          </div>
+          <div class="export-row" v-if="singleResult && singleResult.boxes.length">
+            <span class="export-label">导出标注</span>
+            <div class="export-btns">
+              <el-button size="small" @click="doExport(singleResult.detection_id, 'coco')">COCO</el-button>
+              <el-button size="small" @click="doExport(singleResult.detection_id, 'yolo')">YOLO</el-button>
+              <el-button size="small" @click="doExport(singleResult.detection_id, 'geojson')">GeoJSON</el-button>
+            </div>
           </div>
           <div class="result-card">
             <div class="card-header"><span class="card-title">识别清单</span><span v-if="singleResult" class="card-badge">{{ singleResult.boxes.length }}</span></div>
@@ -112,17 +177,19 @@
           <!-- 顶部状态栏 -->
           <div class="panel-topbar">
             <span class="panel-label">
-              {{ activeTab === 'batch' ? '批量检测' : '文件夹检测' }}
+              批量检测
               <span class="panel-count">共 {{ batchFiles.length }} 张</span>
             </span>
-            <div class="panel-status">
+            <div class="panel-status" style="display:flex;align-items:center;gap:10px">
               <span v-if="batchLoading" class="status processing">
                 <span class="status-dot"></span>检测中 {{ batchDone }}/{{ batchFiles.length }}...
+                <el-button size="small" type="danger" @click="stopDetection" style="margin-left:10px">停止</el-button>
               </span>
               <span v-else-if="batchDone > 0" class="status done">
                 <span class="status-dot"></span>全部完成 · {{ batchTotalObjects }} 个目标 · {{ batchTotalTime }}s
               </span>
               <span v-else class="status idle"><span class="status-dot"></span>等待上传</span>
+              <el-button v-if="batchFiles.length" size="small" @click="resetBatch" circle><el-icon :size="14"><Close /></el-icon></el-button>
             </div>
           </div>
 
@@ -150,7 +217,7 @@
           <!-- 空状态 -->
           <div v-else class="batch-empty">
             <el-icon :size="48"><FolderOpened /></el-icon>
-            <p>点击上方「{{ activeTab === 'batch' ? '批量检测' : '文件夹' }}」选择图片</p>
+            <p>点击上方「批量检测」上传整个文件夹进行检测</p>
           </div>
         </div>
 
@@ -161,18 +228,33 @@
             <div class="info-row"><span class="info-label">检测耗时</span><span class="info-value mono">{{ selectedBatchItem.detection_time || '-' }}s</span></div>
             <div class="info-row"><span class="info-label">检测数量</span><span class="info-value mono">{{ selectedBatchItem.total_objects || 0 }}</span></div>
           </div>
+          <div class="export-row" v-if="selectedBatchItem.boxes && selectedBatchItem.boxes.length && selectedBatchItem.detection_id">
+            <span class="export-label">导出标注</span>
+            <div class="export-btns">
+              <el-button size="small" @click="doExport(selectedBatchItem.detection_id, 'coco')">COCO</el-button>
+              <el-button size="small" @click="doExport(selectedBatchItem.detection_id, 'yolo')">YOLO</el-button>
+              <el-button size="small" @click="doExport(selectedBatchItem.detection_id, 'geojson')">GeoJSON</el-button>
+            </div>
+          </div>
 
-          <!-- 结果图预览 -->
-          <div class="batch-result-img-wrap" v-if="selectedBatchItem.result_url">
-            <img :src="selectedBatchItem.result_url" class="batch-result-img" />
-            <el-button
-              class="batch-download-btn"
-              size="small"
-              circle
-              @click.stop="downloadResult(selectedBatchItem.result_url)"
-            >
-              <el-icon :size="16"><Download /></el-icon>
-            </el-button>
+          <!-- 原图 + 结果图对比 -->
+          <div class="image-compare-mini" v-if="selectedBatchItem.result_url">
+            <div class="mini-img-card">
+              <img v-if="selectedBatchItem.original_url" :src="selectedBatchItem.original_url" class="mini-img" />
+              <div class="mini-label">原图</div>
+            </div>
+            <div class="mini-img-card">
+              <img :src="selectedBatchItem.result_url" class="mini-img" />
+              <div class="mini-label result-label">检测结果</div>
+              <el-button
+                class="mini-download-btn"
+                size="small"
+                circle
+                @click.stop="downloadResult(selectedBatchItem.result_url)"
+              >
+                <el-icon :size="14"><Download /></el-icon>
+              </el-button>
+            </div>
           </div>
 
           <div class="result-card">
@@ -196,39 +278,55 @@
 <script setup>
 import { ref, reactive, onMounted } from "vue";
 import { ElMessage } from "element-plus";
-import { detectSingleImage, getModels, switchModel } from "../api/detection";
-import { Picture, Aim, Plus, Folder, Refresh, FolderOpened, Download } from "@element-plus/icons-vue";
+import { detectSingleImage, getModels, switchModel, exportDetection, previewImage, downloadResultsZip } from "../api/detection";
+import { requireLogin } from "../utils/request";
+import { Picture, Aim, Close, Folder, Refresh, FolderOpened, Download } from "@element-plus/icons-vue";
 
-const selectedModel = ref("yolo11m-obb");
+const selectedModel = ref("");
 const availableModels = ref([]);
 const activeTab = ref("single");
 const loading = ref(false);
-const singleOriginal = ref("");
-const singleResultImg = ref("");
-const singleResult = ref(null);
-const fileInputs = reactive({});
+const confThreshold = ref(0.5);
+const iouThreshold = ref(0.45);
+const useSahi = ref(false);
+const singleOriginal = ref(sessionStorage.getItem('rsod_single_original') || "");
+const singleResultImg = ref(sessionStorage.getItem('rsod_single_result_img') || "");
+const singleResult = ref(JSON.parse(sessionStorage.getItem('rsod_single_result') || 'null'));
+const singleInput = ref(null);
+const folderInput = ref(null);
 
 // ── 批量状态 ──
-const batchFiles = ref([]);        // { filename, preview, file, done, total_objects, detection_time, boxes, result_url }
+const batchFiles = ref([]);
 const batchLoading = ref(false);
 const batchDone = ref(0);
 const batchCurrentIdx = ref(-1);
 const batchTotalObjects = ref(0);
 const batchTotalTime = ref(0);
 const batchSelectedIdx = ref(-1);
+const stopRequested = ref(false);
+const currentAbortController = ref(null);
 
 const functionTabs = [
-  { key: "single", name: "单图检测", desc: "识别单张遥感影像", icon: Picture, accept: "image/*" },
-  { key: "batch", name: "批量检测", desc: "一次处理多张影像", icon: Plus, accept: "image/*" },
-  { key: "folder", name: "文件夹", desc: "上传整个文件夹", icon: Folder, accept: "image/*" },
+  { key: "single", name: "单图检测", desc: "识别单张遥感影像", icon: Picture, accept: "image/*,.tif,.tiff" },
+  { key: "batch", name: "批量检测", desc: "上传整个文件夹", icon: Folder, accept: "image/*,.tif,.tiff" },
 ];
 
 const selectedBatchItem = ref(null);
+
+// 解析图片 URL — 绝对路径直接用, 相对路径拼接后端地址
+const resolveUrl = (url) => {
+  if (!url) return "";
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("blob:")) {
+    return url;
+  }
+  return `http://localhost:8000${url}`;
+};
 
 // ── 事件处理 ──
 const handleFileChange = async (event, tabKey) => {
   const files = event.target.files;
   if (!files || !files.length) return;
+  if (!(await requireLogin())) { event.target.value = ""; return; }
 
   if (tabKey === "single") {
     await processSingle(files[0]);
@@ -239,17 +337,38 @@ const handleFileChange = async (event, tabKey) => {
 };
 
 const processSingle = async (file) => {
-  singleOriginal.value = URL.createObjectURL(file);
+  const isGeoTiff = file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff');
+
+  // TIF: 先调 preview 接口拿 PNG 预览，立即显示原图
+  if (isGeoTiff) {
+    const previewFd = new FormData();
+    previewFd.append("file", file);
+    try {
+      const previewRes = await previewImage(previewFd);
+      if (previewRes.success) {
+        singleOriginal.value = resolveUrl(previewRes.data.preview_url);
+      }
+    } catch (e) { /* 预览失败不影响检测 */ }
+  } else {
+    singleOriginal.value = URL.createObjectURL(file);
+  }
+
   const fd = new FormData();
   fd.append("file", file);
   fd.append("model_name", selectedModel.value);
+  fd.append("conf_threshold", confThreshold.value);
+  fd.append("iou_threshold", iouThreshold.value);
+  fd.append("use_sahi", useSahi.value);
   loading.value = true;
   try {
     const res = await detectSingleImage(fd);
     if (res.success) {
       singleResult.value = res.data;
-      singleResultImg.value = `http://localhost:8000${res.data.result_image_url}`;
-      singleOriginal.value = `http://localhost:8000${res.data.image_url}`;
+      singleResultImg.value = resolveUrl(res.data.result_image_url);
+      singleOriginal.value = resolveUrl(res.data.image_url);
+      sessionStorage.setItem('rsod_single_original', singleOriginal.value);
+      sessionStorage.setItem('rsod_single_result_img', singleResultImg.value);
+      sessionStorage.setItem('rsod_single_result', JSON.stringify(res.data));
     }
   } catch (e) {
     ElMessage.error("检测失败");
@@ -260,6 +379,9 @@ const resetSingle = () => {
   singleOriginal.value = "";
   singleResultImg.value = "";
   singleResult.value = null;
+  sessionStorage.removeItem('rsod_single_original');
+  sessionStorage.removeItem('rsod_single_result_img');
+  sessionStorage.removeItem('rsod_single_result');
 };
 
 const downloadResult = async (url) => {
@@ -282,7 +404,7 @@ const downloadResult = async (url) => {
 
 // ── 批量 ──
 const processBatch = async (files) => {
-  // 初始化列表
+  // 初始化
   batchFiles.value = files.map(f => ({
     filename: f.name,
     preview: URL.createObjectURL(f),
@@ -292,23 +414,30 @@ const processBatch = async (files) => {
     detection_time: 0,
     boxes: [],
     result_url: "",
+    original_url: "",
+    detection_id: "",
   }));
   batchSelectedIdx.value = -1;
   selectedBatchItem.value = null;
   batchDone.value = 0;
   batchTotalObjects.value = 0;
   batchTotalTime.value = 0;
+  stopRequested.value = false;
 
   const tStart = performance.now();
   batchLoading.value = true;
 
-  // 顺序处理每一张
   for (let i = 0; i < batchFiles.value.length; i++) {
+    if (stopRequested.value) break;
+
     batchCurrentIdx.value = i;
     const item = batchFiles.value[i];
     const fd = new FormData();
     fd.append("file", item.file);
     fd.append("model_name", selectedModel.value);
+    fd.append("conf_threshold", confThreshold.value);
+    fd.append("iou_threshold", iouThreshold.value);
+    fd.append("use_sahi", useSahi.value);
     try {
       const res = await detectSingleImage(fd);
       if (res.success) {
@@ -316,9 +445,14 @@ const processBatch = async (files) => {
         item.total_objects = res.data.total_objects;
         item.detection_time = res.data.detection_time;
         item.boxes = res.data.boxes;
-        item.result_url = `http://localhost:8000${res.data.result_image_url}`;
-        item.preview = `http://localhost:8000${res.data.image_url}`;
+        item.result_url = resolveUrl(res.data.result_image_url);
+        item.original_url = resolveUrl(res.data.image_url);
+        item.preview = item.original_url;
+        item.detection_id = res.data.detection_id;
         batchTotalObjects.value += res.data.total_objects;
+        // 预加载原图+结果图，切换时两者同时出现
+        new Image().src = item.original_url;
+        new Image().src = item.result_url;
       }
     } catch (e) {
       item.done = true;
@@ -332,7 +466,6 @@ const processBatch = async (files) => {
   batchLoading.value = false;
   batchCurrentIdx.value = -1;
 
-  // 自动选中第一张有结果的
   const firstDone = batchFiles.value.find(f => f.done && f.total_objects > 0);
   if (firstDone) {
     const idx = batchFiles.value.indexOf(firstDone);
@@ -341,19 +474,58 @@ const processBatch = async (files) => {
   }
 };
 
+const stopDetection = () => {
+  stopRequested.value = true;
+  ElMessage.warning("正在停止...");
+};
+
+const clearImageCache = () => {
+  batchFiles.value.forEach(item => {
+    if (item.preview && item.preview.startsWith('blob:')) {
+      URL.revokeObjectURL(item.preview);
+    }
+  });
+  ElMessage.success("本地图片缓存已清理");
+};
+
+const downloadAllResults = async () => {
+  const ids = batchFiles.value.filter(f => f.detection_id).map(f => f.detection_id);
+  if (!ids.length) { ElMessage.error("没有可下载的结果图"); return; }
+  try {
+    const blob = await downloadResultsZip(ids);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `detection_results_${Date.now()}.zip`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    ElMessage.success(`已下载 ${ids.length} 张结果图`);
+  } catch (e) {
+    ElMessage.error("批量下载失败");
+  }
+};
+
 const selectBatchItem = (idx) => {
-  batchSelectedIdx.value = idx;
-  selectedBatchItem.value = batchFiles.value[idx];
+  if (batchSelectedIdx.value === idx) {
+    // 再点同一个取消选中
+    batchSelectedIdx.value = -1;
+    selectedBatchItem.value = null;
+  } else {
+    batchSelectedIdx.value = idx;
+    selectedBatchItem.value = batchFiles.value[idx];
+  }
 };
 
 // ── 模型切换 ──
 onMounted(async () => {
   try {
     const res = await getModels();
-    if (res.data) {
+    if (res.data && res.data.length) {
       availableModels.value = res.data;
       const loaded = res.data.find(m => m.loaded);
-      if (loaded) selectedModel.value = loaded.key;
+      selectedModel.value = loaded ? loaded.key : res.data[0].key;
     }
   } catch (e) { /* use defaults */ }
 });
@@ -370,6 +542,24 @@ const onModelChange = async (key) => {
     }
   } catch (e) {
     ElMessage.error("模型切换失败");
+  }
+};
+
+const doExport = async (recordId, format) => {
+  try {
+    const blob = await exportDetection(recordId, format);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const extMap = { coco: "json", yolo: "txt", geojson: "geojson" };
+    a.download = `detection_${recordId.slice(0, 8)}.${extMap[format]}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    ElMessage.success(`已导出 ${format.toUpperCase()} 格式`);
+  } catch (e) {
+    ElMessage.error("导出失败");
   }
 };
 
@@ -391,21 +581,88 @@ const resetBatch = () => {
 .header-left .page-subtitle { font-size: 13px; color: var(--text-muted); }
 .model-select { width: 180px; }
 
+/* 模型配置框 */
+.model-config-box {
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px; background: var(--bg-card);
+  border: 1px solid var(--border-color); border-radius: var(--radius-md);
+}
+.config-label { font-size: 11px; color: var(--accent); font-weight: 700; letter-spacing: 1px; white-space: nowrap; }
+.config-controls { display: flex; align-items: center; gap: 10px; }
+
+/* SAHI 开关 */
+.sahi-toggle {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 14px; border-radius: 20px;
+  background: var(--bg-input); border: 1px solid var(--border-color);
+  cursor: pointer; transition: all 0.2s; user-select: none;
+  white-space: nowrap;
+}
+.sahi-toggle:hover { border-color: var(--border-light); }
+.sahi-toggle.on { background: var(--accent-dim); border-color: var(--accent); }
+.sahi-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--text-muted); transition: all 0.2s;
+}
+.sahi-toggle.on .sahi-dot { background: var(--accent); box-shadow: 0 0 6px var(--accent-glow); }
+.sahi-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
+.sahi-toggle.on .sahi-label { color: var(--accent); }
+
+/* SAHI 说明气泡 */
+.sahi-explain { font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+.sahi-explain strong { color: var(--text-primary); }
+.tag-rec { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; background: var(--accent-dim); color: var(--accent); font-weight: 600; }
+.tag-off { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; background: var(--bg-input); color: var(--text-muted); font-weight: 600; }
+
+/* 阈值调节 */
+.threshold-bar {
+  display: flex; gap: 24px; margin-bottom: 20px;
+  padding: 14px 18px; background: var(--bg-card);
+  border: 1px solid var(--border-color); border-radius: var(--radius-md);
+}
+.threshold-item { flex: 1; display: flex; align-items: center; gap: 12px; }
+.threshold-label { font-size: 12px; color: var(--text-muted); white-space: nowrap; min-width: 64px; }
+.threshold-slider { flex: 1; }
+.threshold-value {
+  font-family: var(--mono); font-size: 12px; color: var(--accent);
+  min-width: 36px; text-align: right;
+}
+
 /* 选项卡 */
-.function-tabs { display: flex; gap: 10px; margin-bottom: 24px; }
+.function-tabs { display: flex; gap: 10px; margin-bottom: 16px; }
 .function-tab {
-  flex: 1; display: flex; align-items: center; padding: 16px;
+  flex: 1; display: flex; align-items: center; padding: 14px 16px;
   background: var(--bg-card); border: 1px solid var(--border-color);
   border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s;
-  position: relative; overflow: hidden;
+  user-select: none;
 }
 .function-tab:hover { border-color: var(--border-light); background: var(--bg-card-hover); }
 .function-tab.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow); }
-.file-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; z-index: 10; }
 .tab-icon { color: var(--accent); margin-right: 12px; flex-shrink: 0; }
 .tab-content { display: flex; flex-direction: column; }
 .tab-text { font-size: 14px; font-weight: 600; color: var(--text-primary); }
 .tab-desc { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+
+/* 上传区域 */
+.upload-zone {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 10px; padding: 52px 20px; margin-bottom: 20px;
+  background: var(--bg-card); border: 2px dashed var(--border-light);
+  border-radius: var(--radius-md); cursor: pointer; transition: all 0.2s;
+  position: relative;
+}
+.upload-zone:hover { border-color: var(--accent); background: var(--bg-card-hover); }
+.upload-text { font-size: 15px; font-weight: 600; color: var(--text-secondary); }
+.upload-hint { font-size: 12px; color: var(--text-muted); }
+.hidden-input { display: none; }
+
+/* 下载栏 */
+.download-bar {
+  display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+  padding: 10px 16px; background: var(--bg-card);
+  border: 1px solid var(--accent-dim); border-radius: var(--radius-md);
+}
+.download-bar-label { font-size: 12px; color: var(--accent); font-weight: 600; white-space: nowrap; }
 
 .main-content { display: flex; gap: 20px; }
 
@@ -458,6 +715,12 @@ const resetBatch = () => {
 .image-card:hover .download-btn { opacity: 1; }
 
 .right-panel { width: 320px; display: flex; flex-direction: column; gap: 14px; flex-shrink: 0; }
+.right-panel.right-empty {
+  align-items: center; justify-content: center; gap: 8px;
+  color: var(--text-muted);
+}
+.right-empty-text { font-size: 14px; font-weight: 500; color: var(--text-secondary); }
+.right-empty-sub { font-size: 12px; }
 
 .info-card {
   background: var(--bg-card); border: 1px solid var(--border-color);
@@ -487,6 +750,15 @@ const resetBatch = () => {
 .box-empty { flex: 1; display: flex; align-items: center; justify-content: center; font-size: 13px; color: var(--text-muted); }
 
 .reset-btn { width: 100%; height: 40px; border-radius: var(--radius-md); }
+
+/* 导出行 */
+.export-row {
+  background: var(--bg-card); border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); padding: 12px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.export-label { font-size: 12px; color: var(--text-muted); }
+.export-btns { display: flex; gap: 8px; }
 
 /* ── 批量网格 ── */
 .batch-grid {
@@ -535,20 +807,27 @@ const resetBatch = () => {
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* 批量结果图 */
-.batch-result-img-wrap {
-  position: relative; border-radius: var(--radius-md); overflow: hidden;
-  border: 1px solid var(--border-color);
+/* 批量结果图：原图+结果对比 */
+.image-compare-mini { display: flex; gap: 8px; }
+.mini-img-card {
+  flex: 1; position: relative; border-radius: var(--radius-sm); overflow: hidden;
+  background: var(--bg-input); border: 1px solid var(--border-color);
 }
-.batch-result-img { width: 100%; display: block; max-height: 200px; object-fit: cover; }
-.batch-download-btn {
-  position: absolute; bottom: 8px; right: 8px;
+.mini-img { width: 100%; height: 150px; object-fit: cover; display: block; }
+.mini-label {
+  position: absolute; top: 6px; left: 6px;
+  padding: 2px 7px; background: rgba(0,0,0,0.85); color: #fff;
+  font-size: 10px; font-weight: 700; font-family: var(--mono); border-radius: 3px;
+}
+.mini-label.result-label { color: var(--accent); background: rgba(0,0,0,0.9); }
+.mini-download-btn {
+  position: absolute; bottom: 6px; right: 6px;
   background: var(--bg-card) !important;
   border-color: var(--border-color) !important;
   color: var(--accent) !important;
   opacity: 0; transition: opacity 0.2s;
 }
-.batch-result-img-wrap:hover .batch-download-btn { opacity: 1; }
+.mini-img-card:hover .mini-download-btn { opacity: 1; }
 
 .batch-empty {
   flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;

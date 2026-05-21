@@ -1,62 +1,58 @@
 /**
- * 本地账号系统（localStorage）
- * 默认管理员账号: admin / admin123
+ * JWT 认证模块 — 对接后端 /api/auth/*
  */
 
-const USERS_KEY = "rsod-users";
-const SESSION_KEY = "rsod-session";
+import axios from "axios";
 
-// 初始化默认账号
-function initUsers() {
-  if (!localStorage.getItem(USERS_KEY)) {
-    const defaultUsers = [
-      { username: "admin", email: "admin@rsod.cn", password: "admin123" },
-    ];
-    localStorage.setItem(USERS_KEY, JSON.stringify(defaultUsers));
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+
+function authApi(url, data) {
+  return axios.post(API_BASE + url, data).then((r) => r.data);
+}
+
+export async function loginUser(identifier, password) {
+  try {
+    const res = await authApi("/auth/login", { account: identifier, password });
+    if (res.success && res.data.access_token) {
+      localStorage.setItem("rsod-access-token", res.data.access_token);
+      localStorage.setItem("rsod-refresh-token", res.data.refresh_token);
+      localStorage.setItem("rsod-user", JSON.stringify(res.data.user));
+      return { success: true, user: res.data.user };
+    }
+    return { success: false, message: res.message || "登录失败" };
+  } catch (err) {
+    return { success: false, message: err.response?.data?.detail || "登录失败" };
   }
 }
 
-export function getUsers() {
-  initUsers();
-  return JSON.parse(localStorage.getItem(USERS_KEY));
-}
-
-export function findUser(username) {
-  return getUsers().find((u) => u.username === username);
-}
-
-export function registerUser(username, email, password) {
-  const users = getUsers();
-  if (findUser(username)) {
-    return { success: false, message: "用户名已存在" };
+export async function registerUser(username, email, password) {
+  try {
+    const res = await authApi("/auth/register", { username, email, password });
+    return { success: res.success, message: res.message };
+  } catch (err) {
+    return { success: false, message: err.response?.data?.detail || "注册失败" };
   }
-  if (users.find((u) => u.email === email)) {
-    return { success: false, message: "邮箱已注册" };
-  }
-  users.push({ username, email, password });
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  return { success: true };
-}
-
-export function loginUser(username, password) {
-  const user = findUser(username);
-  if (!user) {
-    return { success: false, message: "用户名不存在，请先注册" };
-  }
-  if (user.password !== password) {
-    return { success: false, message: "密码错误" };
-  }
-  localStorage.setItem(SESSION_KEY, JSON.stringify({ username: user.username, email: user.email }));
-  return { success: true, user: { username: user.username, email: user.email } };
 }
 
 export function logoutUser() {
-  localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem("rsod-access-token");
+  localStorage.removeItem("rsod-refresh-token");
+  localStorage.removeItem("rsod-user");
+}
+
+export function getToken() {
+  return localStorage.getItem("rsod-access-token");
+}
+
+export function getRefreshToken() {
+  return localStorage.getItem("rsod-refresh-token");
 }
 
 export function getSession() {
   try {
-    return JSON.parse(localStorage.getItem(SESSION_KEY));
+    const user = JSON.parse(localStorage.getItem("rsod-user"));
+    const token = localStorage.getItem("rsod-access-token");
+    return token && user ? { ...user, token } : null;
   } catch {
     return null;
   }

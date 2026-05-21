@@ -1,8 +1,8 @@
 <template>
   <div class="sidebar-container">
     <div class="logo-section">
-      <div class="logo-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <div class="logo-mark">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="12" cy="12" r="10"/>
           <circle cx="12" cy="12" r="3"/>
           <line x1="12" y1="2" x2="12" y2="9"/>
@@ -12,8 +12,8 @@
         </svg>
       </div>
       <div class="logo-text">
-        <div class="logo-title">遥感目标检测</div>
-        <div class="logo-subtitle">遥感目标检测</div>
+        <div class="logo-title">RSOD</div>
+        <div class="logo-subtitle">Remote Sensing</div>
       </div>
     </div>
 
@@ -25,15 +25,20 @@
         :class="{ active: currentPath === item.path }"
         @click="handleMenuClick(item)"
       >
-        <el-icon :size="18" class="nav-icon"><component :is="item.icon" /></el-icon>
-        <span class="nav-text">{{ item.name }}</span>
-        <span v-if="currentPath === item.path" class="active-indicator"></span>
+        <el-icon :size="17" class="nav-icon"><component :is="item.icon" /></el-icon>
+        <div class="nav-text-wrap">
+          <span class="nav-text">{{ item.name }}</span>
+          <span class="nav-desc">{{ item.desc }}</span>
+        </div>
       </div>
     </div>
 
     <div class="sidebar-footer">
-      <div class="status-dot"></div>
-      <span class="status-text">YOLO11x-OBB · DOTA v1.0</span>
+      <div class="footer-divider"></div>
+      <div class="footer-row">
+        <span class="status-dot"></span>
+        <span class="status-text">检测 · 变化 · 视频流</span>
+      </div>
     </div>
   </div>
 </template>
@@ -41,17 +46,20 @@
 <script setup>
 import { computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
-import { Picture, Clock, ChatDotRound, DataLine, User } from "@element-plus/icons-vue";
+import { Picture, Clock, TrendCharts, ChatDotRound, DataLine, User, Connection, VideoCamera } from "@element-plus/icons-vue";
 
 const router = useRouter();
 const route = useRoute();
 
 const menuList = [
-  { name: "智能检测", icon: Picture, path: "/detection" },
-  { name: "历史记录", icon: Clock, path: "/history" },
-  { name: "AI 问答", icon: ChatDotRound, path: "/qa" },
-  { name: "目标库", icon: DataLine, path: "/targets" },
-  { name: "个人中心", icon: User, path: "/profile" },
+  { name: "智能检测", desc: "遥感目标检测", icon: Picture, path: "/detection" },
+  { name: "变化检测", desc: "双时相对比", icon: Connection, path: "/change-detection" },
+  { name: "视频流检测", desc: "逐帧推理", icon: VideoCamera, path: "/video" },
+  { name: "历史记录", desc: "记录管理", icon: Clock, path: "/history" },
+  { name: "检测统计", desc: "聚合分析", icon: TrendCharts, path: "/statistics" },
+  { name: "目标库", desc: "类别字典", icon: DataLine, path: "/targets" },
+  { name: "AI 问答", desc: "智能助手", icon: ChatDotRound, path: "/qa" },
+  { name: "个人中心", desc: "账户信息", icon: User, path: "/profile" },
 ];
 
 const currentPath = computed(() => route.path);
@@ -60,120 +68,62 @@ const handleMenuClick = (item) => router.push(item.path);
 
 <style scoped>
 .sidebar-container {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  position: relative;
+  height: 100%; display: flex; flex-direction: column;
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
 }
 
 .logo-section {
-  height: 64px;
-  display: flex;
-  align-items: center;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--border-color);
+  height: 56px; display: flex; align-items: center; gap: 10px;
+  padding: 0 16px; border-bottom: 1px solid var(--border-color);
 }
-
-.logo-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(135deg, var(--accent), var(--accent-secondary));
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--on-accent);
-  margin-right: 12px;
-  flex-shrink: 0;
+.logo-mark {
+  width: 34px; height: 34px; border-radius: 6px;
+  background: linear-gradient(135deg, var(--accent-dim), transparent);
+  border: 1px solid rgba(0, 194, 232, 0.15);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--accent); flex-shrink: 0;
 }
-
 .logo-text { overflow: hidden; }
 .logo-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: 0.5px;
+  font-size: 14px; font-weight: 700; color: var(--text-primary);
+  letter-spacing: 0.5px; font-family: var(--mono);
 }
 .logo-subtitle {
-  font-size: 11px;
-  color: var(--text-muted);
-  margin-top: 1px;
+  font-size: 10px; color: var(--text-muted); letter-spacing: 0.5px;
 }
 
-.nav-menu {
-  flex: 1;
-  padding: 16px 10px;
-}
+.nav-menu { flex: 1; padding: 12px 8px; }
 
 .nav-item {
-  display: flex;
-  align-items: center;
-  padding: 12px 14px;
-  border-radius: var(--radius-md);
-  margin-bottom: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-md); margin-bottom: 1px;
+  cursor: pointer; transition: all 0.15s; color: var(--text-secondary);
   position: relative;
-  color: var(--text-secondary);
 }
-
-.nav-item:hover {
-  background: var(--bg-card);
-  color: var(--text-primary);
-}
-
+.nav-item:hover { background: var(--bg-card-hover); color: var(--text-primary); }
 .nav-item.active {
-  background: var(--accent-dim);
-  color: var(--accent);
-  font-weight: 500;
+  background: var(--accent-dim); color: var(--accent); font-weight: 500;
+}
+.nav-item.active::before {
+  content: ''; position: absolute; left: 0; top: 50%; transform: translateY(-50%);
+  width: 2px; height: 18px; background: var(--accent); border-radius: 0 2px 2px 0;
 }
 
-.active-indicator {
-  position: absolute;
-  left: -10px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
-  background: var(--accent);
-  border-radius: 0 2px 2px 0;
-  box-shadow: 0 0 8px var(--accent-glow);
-}
+.nav-icon { flex-shrink: 0; opacity: 0.8; }
+.nav-item.active .nav-icon { opacity: 1; }
 
-.nav-icon {
-  margin-right: 12px;
-  flex-shrink: 0;
-  font-size: 18px;
-}
+.nav-text-wrap { display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
+.nav-text { font-size: 13px; line-height: 1.3; }
+.nav-desc { font-size: 10px; color: var(--text-muted); line-height: 1.3; white-space: nowrap; }
+.nav-item.active .nav-desc { color: var(--accent); opacity: 0.6; }
 
-.nav-text {
-  font-size: 13px;
-}
-
-.sidebar-footer {
-  padding: 14px 16px;
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
+.sidebar-footer { padding: 12px 16px; }
+.footer-divider { height: 1px; background: var(--border-color); margin-bottom: 12px; }
+.footer-row { display: flex; align-items: center; gap: 8px; }
 .status-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 6px var(--accent-glow);
-  animation: pulse 2s ease-in-out infinite;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--accent);
+  box-shadow: 0 0 4px var(--accent-glow);
 }
-
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
-
-.status-text {
-  font-size: 11px;
-  color: var(--text-muted);
-}
+.status-text { font-size: 10px; color: var(--text-muted); font-family: var(--mono); letter-spacing: 0.5px; }
 </style>

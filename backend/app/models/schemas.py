@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Literal
 from datetime import datetime
 
 
@@ -121,3 +121,137 @@ class TargetListResponse(BaseModel):
     success: bool
     message: str
     data: List[TargetItem]
+
+
+# ── 标注导出 ──────────────────────────────────────
+
+ExportFormat = Literal["coco", "yolo", "geojson"]
+
+
+class ExportRequest(BaseModel):
+    record_id: str
+    format: ExportFormat = "coco"
+
+
+# ── 检测统计 ──────────────────────────────────────
+
+class ClassMetrics(BaseModel):
+    class_name: str
+    chinese_name: str
+    count: int
+    avg_confidence: float
+    confidence_std: float
+
+
+class DailyTrend(BaseModel):
+    date: str
+    count: int
+    objects: int
+
+
+class ModelUsage(BaseModel):
+    model: str
+    count: int
+    objects: int
+
+
+class ConfBin(BaseModel):
+    range: str
+    count: int
+
+
+class EvaluationStats(BaseModel):
+    total_images: int
+    total_objects: int
+    avg_objects_per_image: float
+    avg_detection_time: float
+    per_class: List[ClassMetrics]
+    daily_trend: List[DailyTrend] = []
+    model_distribution: List[ModelUsage] = []
+    confidence_distribution: List[ConfBin] = []
+
+
+class EvaluationResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[EvaluationStats] = None
+
+
+# ── 认证 ──────────────────────────────────────
+
+class LoginRequest(BaseModel):
+    account: str
+    password: str
+
+
+class RegisterRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+
+# ── 变化检测 ──────────────────────────────────────
+
+class ChangeDetectionResult(BaseModel):
+    detection_id: str
+    image_a_url: str
+    image_b_url: str
+    result_url: str
+    change_ratio: float
+    detection_time: float
+    model_name: str
+    created_at: datetime
+
+
+class ChangeDetectionResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[ChangeDetectionResult] = None
+
+
+class BatchChangeItem(BaseModel):
+    filename_a: str
+    filename_b: str
+    image_a_url: str
+    image_b_url: str
+    result_url: str
+    change_ratio: float
+    detection_time: float
+
+
+class BatchChangeResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[BatchChangeItem]
+    total_pairs: int
+    total_time: float
+
+
+class ChangeHistoryRecord(BaseModel):
+    id: str
+    filename_a: str
+    filename_b: str
+    image_a_url: str
+    image_b_url: str
+    result_url: str
+    type: str
+    status: str
+    change_ratio: float
+    detection_time: float
+    model_name: str
+    created_at: datetime
+
+
+class ChangeHistoryListResponse(BaseModel):
+    success: bool
+    message: str
+    data: List[ChangeHistoryRecord]
+    total: int
+    page: int
+    page_size: int
+
+
+class ChangeHistoryDetailResponse(BaseModel):
+    success: bool
+    message: str
+    data: Optional[ChangeDetectionResult] = None

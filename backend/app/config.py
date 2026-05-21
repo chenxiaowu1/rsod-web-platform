@@ -60,7 +60,7 @@ class Settings(BaseModel):
     UPLOAD_DIR: str = "static/uploads"
     RESULT_DIR: str = "static/results"
 
-    YOLO_MODEL_PATH: str = "app/models/yolo11x-obb.pt"
+    YOLO_MODEL_PATH: str = "app/models/detection/yolo11x-obb.pt"
     DEFAULT_MODEL: str = "yolo11m-obb"
     CONFIDENCE_THRESHOLD: float = 0.5
     IOU_THRESHOLD: float = 0.45
@@ -70,7 +70,36 @@ class Settings(BaseModel):
     LLM_BASE_URL: str = "https://api.deepseek.com"
     LLM_MODEL: str = "deepseek-chat"
 
+    # Database
+    DB_HOST: str = "localhost"
+    DB_PORT: int = 5432
+    DB_USER: str = "rsod_user"
+    DB_PASSWORD: str = "rsod_password"
+    DB_NAME: str = "rsod_db"
+
+    # MinIO
+    MINIO_ENDPOINT: str = "localhost:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_BUCKET: str = "rsod-bucket"
+
+    # JWT
+    SECRET_KEY: str = "change-me-in-production"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Engine URLs
+    DET_ENGINE_URL: str = "http://localhost:8001"
+    CD_ENGINE_URL: str = "http://localhost:8002"
+    VIDEO_ENGINE_URL: str = "http://localhost:8003"
+    DEFAULT_DET_MODEL: str = "yolo11m-obb"
+    DEFAULT_CD_MODEL: str = "ban-b0"
+
     CORS_ORIGINS: list = ["http://localhost:5173", "http://localhost:3000"]
+
+    @property
+    def DATABASE_URL(self) -> str:
+        return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
 
 def get_settings() -> Settings:

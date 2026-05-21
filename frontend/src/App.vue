@@ -1,31 +1,30 @@
 <template>
-  <router-view v-if="isAuthPage" />
-  <MainLayout v-else>
-    <template #sidebar>
-      <Sidebar />
-    </template>
-    <template #header>
-      <Header />
-    </template>
-    <template #content>
-      <router-view />
-    </template>
+  <MainLayout>
+    <template #sidebar><Sidebar /></template>
+    <template #header><Header @open-login="showModal = true" /></template>
+    <template #content><router-view /></template>
   </MainLayout>
+  <LoginModal :visible="showModal" @close="showModal = false" @logged-in="onLoggedIn" />
 </template>
 
 <script setup>
-import { computed } from "vue";
-import { useRoute } from "vue-router";
+import { ref, onMounted } from "vue";
 import MainLayout from "./layouts/MainLayout.vue";
 import Sidebar from "./components/Sidebar.vue";
 import Header from "./components/Header.vue";
+import LoginModal from "./components/LoginModal.vue";
+import { setLoginModalTrigger, notifyLoggedIn } from "./utils/request";
 
-const route = useRoute();
+const showModal = ref(false);
 
-const isAuthPage = computed(() => {
-  const authPaths = ["/login", "/register", "/forgot-password"];
-  return authPaths.includes(route.path);
+onMounted(() => {
+  setLoginModalTrigger(() => { showModal.value = true; });
 });
+
+const onLoggedIn = () => {
+  showModal.value = false;
+  notifyLoggedIn();
+};
 </script>
 
 <style scoped></style>
