@@ -17,6 +17,7 @@ class DetectionResult(BaseModel):
     detection_id: str
     image_url: str
     result_image_url: str
+    preview_image_url: str = ""
     boxes: List[DetectionBox]
     total_objects: int
     detection_time: float
@@ -35,9 +36,11 @@ class BatchDetectionItem(BaseModel):
     filename: str
     image_url: str
     result_image_url: str
+    preview_image_url: str = ""
     total_objects: int
     detection_time: float
     boxes: List[DetectionBox] = []
+    detection_id: str = ""
 
 
 class BatchDetectionResponse(BaseModel):
@@ -66,6 +69,7 @@ class HistoryRecord(BaseModel):
     filename: str
     image_url: str
     result_image_url: str
+    preview_image_url: str = ""
     type: str                        # single / batch
     status: str                      # completed / processing / failed
     created_at: datetime
@@ -113,7 +117,7 @@ class QAResponse(BaseModel):
 class TargetItem(BaseModel):
     id: int
     name: str
-    chinese_name: str
+    chinese_name: str = ""
     description: Optional[str] = None
 
 

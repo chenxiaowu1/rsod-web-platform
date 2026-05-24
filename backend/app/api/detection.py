@@ -1,11 +1,88 @@
-import os, io, json, time, cv2, httpx
+import io, json, time, uuid, cv2, httpx, logging
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import urlparse
 import numpy as np
+
+
+def _imread(path):
+    """cv2.imread 的 Unicode-safe 替代，避免 Windows 中文路径编码问题。"""
+    data = np.fromfile(str(path), dtype=np.uint8)
+    return cv2.imdecode(data, cv2.IMREAD_COLOR)
+
+
+def _imwrite(path, img):
+    """cv2.imwrite 的 Unicode-safe 替代。"""
+    _, buf = cv2.imencode(Path(path).suffix, img)
+    buf.tofile(str(path))
+
+
+GEOSPATIAL = {'.tif', '.tiff', '.img', '.ntf'}
+_COLORS = [(0, 0, 255), (0, 255, 0), (255, 0, 0), (0, 255, 255),
+           (255, 255, 0), (255, 0, 255), (128, 0, 255), (255, 128, 0),
+           (0, 128, 255), (128, 255, 0), (0, 255, 128), (255, 0, 128),
+           (128, 128, 255), (255, 128, 128), (128, 255, 128)]
+
+
+def _tif_to_preview_rgb(filepath):
+    """读取 TIF 并返回 3 通道 RGB 预览图 (numpy uint8)。"""
+    import rasterio
+    with rasterio.open(filepath) as src:
+        n = src.count
+        if n >= 3:
+            bands = [src.read(i + 1) for i in range(3)]
+        elif n == 2:
+            bands = [src.read(1), src.read(2), src.read(1)]
+        elif n == 1:
+            b = src.read(1)
+            bands = [b, b, b]
+        else:
+            return np.zeros((256, 256, 3), dtype=np.uint8)
+
+    channels = []
+    for b in bands:
+        bf = b.astype(np.float32)
+        p_low, p_high = np.percentile(bf, 2), np.percentile(bf, 98)
+        if p_high - p_low < 1e-6:
+            p_high = p_low + 1
+        channels.append(np.clip((bf - p_low) / (p_high - p_low) * 255, 0, 255).astype(np.uint8))
+    return np.dstack(channels)
+
+
+def _generate_tif_preview(filepath):
+    """对 TIF 生成 PNG 预览，上传 MinIO，返回 preview_url。非 TIF 返回 None；TIF 失败也返回 None（调用方决不可回退 raw tif 给浏览器）。"""
+    ext = Path(filepath).suffix.lower()
+    if ext not in GEOSPATIAL:
+        return None
+    try:
+        img = _tif_to_preview_rgb(filepath)
+        png_name = f"preview_{Path(filepath).stem}_{uuid.uuid4().hex[:6]}.png"
+        png_path = Paths.uploads() / png_name
+        _imwrite(png_path, cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+        minio_service.upload_file(str(png_path), f"uploads/{png_name}", "image/png")
+        return get_file_url(png_name, "static/uploads")
+    except Exception as e:
+        logger.error("TIF preview generation FAILED for %s: %s — raw TIF will not display in browser", filepath, e)
+        return None
+
+
+def _draw_annotations(image, boxes):
+    """在 image 上绘制检测框 + 标签文字，原地修改。"""
+    for b in boxes:
+        color = _COLORS[int(b["class_id"]) % len(_COLORS)]
+        cv2.rectangle(image, (int(b["x1"]), int(b["y1"])),
+                      (int(b["x2"]), int(b["y2"])), color, 2)
+        label = f'{b["class_name"]} {b["confidence"]:.2f}'
+        cv2.putText(image, label, (int(b["x1"]), max(int(b["y1"]) - 5, 15)),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
+
+
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from app.services.history_service import list_records, get_record, delete_record, save_record, get_all_records
 from app.utils.file_utils import save_upload_file, ensure_directories, get_file_url
+from app.utils.paths import Paths
+from app.utils.validation import CheckContext, DataValidator
 from app.config import settings
 from app.models.db_models import User
 from app.models.schemas import (
@@ -18,19 +95,13 @@ from app.models.schemas import (
 )
 from app.utils.dependencies import get_current_user
 from app.services.minio_service import minio_service
+from app.services.redis_service import redis_service
 
+logger = logging.getLogger("rsod.detection")
 router = APIRouter(prefix="/detection", tags=["detection"])
 ensure_directories()
 
-ALLOWED = {'.jpg', '.jpeg', '.png', '.bmp', '.webp', '.tif', '.tiff', '.geotiff', '.ntf', '.img'}
 DET_ENGINE = settings.DET_ENGINE_URL
-
-
-def _valid_ext(name):
-    ext = os.path.splitext(name)[1].lower()
-    if ext not in ALLOWED:
-        raise HTTPException(400, f"不支持的文件格式: {ext}")
-    return ext
 
 
 # ── 导出工具函数 ────────────────────────────────
@@ -86,8 +157,22 @@ async def switch_model(data: dict):
 
 @router.post("/preview")
 async def preview_image(file: UploadFile = File(...)):
-    _valid_ext(file.filename)
-    filename = await save_upload_file(file, settings.UPLOAD_DIR)
+    ctx = CheckContext(file_path=Path(file.filename))
+    validator = DataValidator(ctx)
+    if not validator.validate_and_report(["file_extension"]):
+        raise HTTPException(400, "文件格式不支持")
+
+    ext = Path(file.filename).suffix.lower()
+    content = await file.read()
+    filename = f"{uuid.uuid4().hex}{ext}"
+    filepath = Paths.uploads() / filename
+    with open(filepath, "wb") as f:
+        f.write(content)
+    minio_service.upload_file(str(filepath), f"uploads/{filename}", file.content_type or "image/jpeg")
+
+    if ext in GEOSPATIAL:
+        preview_url = _generate_tif_preview(filepath) or ""
+        return {"success": True, "data": {"preview_url": preview_url, "filename": filename}}
     return {"success": True, "data": {"preview_url": get_file_url(filename, "static/uploads"), "filename": filename}}
 
 
@@ -102,9 +187,25 @@ async def detect_single_image(
     use_sahi: bool = Form(False),
     current_user: User = Depends(get_current_user),
 ):
-    _valid_ext(file.filename)
-    filename = await save_upload_file(file, settings.UPLOAD_DIR)
-    image_path = os.path.join(settings.UPLOAD_DIR, filename)
+    # 数据验证
+    ctx = CheckContext(
+        file_path=Path(file.filename),
+        model_name=model_name,
+        conf_threshold=conf_threshold,
+        iou_threshold=iou_threshold,
+    )
+    validator = DataValidator(ctx)
+    if not validator.validate_and_report(["file_extension", "file_size", "image_readable", "detection_params"]):
+        raise HTTPException(400, "数据验证未通过")
+
+    if not await redis_service.check_rate_limit(current_user.id):
+        raise HTTPException(429, "请求过于频繁，请稍后重试")
+
+    logger.info("开始单图检测: %s, 模型: %s, 用户: %s", file.filename, model_name, current_user.username)
+
+    upload_dir = str(Paths.uploads())
+    filename = await save_upload_file(file, upload_dir)
+    image_path = Paths.uploads() / filename
 
     data = {"model_name": model_name, "conf_threshold": conf_threshold,
             "iou_threshold": iou_threshold, "use_sahi": str(use_sahi).lower()}
@@ -115,45 +216,42 @@ async def detect_single_image(
     async with httpx.AsyncClient(timeout=120) as c:
         r = await c.post(f"{DET_ENGINE}/detect/single", files=fd, data=data)
     if r.status_code != 200:
-        raise HTTPException(r.status_code, detail=f"检测引擎错误: {r.text}")
+        logger.error("检测引擎返回 %d: %s", r.status_code, r.text[:200])
+        raise HTTPException(502, "检测服务暂时不可用，请稍后重试")
 
     raw = r.json()
 
-    # 绘制结果图（安全画框）
+    # 绘制结果图
     result_filename = f"result_{raw['detection_id'][:8]}.jpg"
-    result_path = os.path.join(settings.RESULT_DIR, result_filename)
-    orig = cv2.imread(image_path)
+    result_path = Paths.results() / result_filename
+    orig = _imread(image_path)
     if orig is not None:
-        bgr_colors = [(0, 0, 255), (0, 255, 0), (255, 0, 0), (0, 255, 255),
-                       (255, 255, 0), (255, 0, 255), (128, 0, 255), (255, 128, 0),
-                       (0, 128, 255), (128, 255, 0), (0, 255, 128), (255, 0, 128),
-                       (128, 128, 255), (255, 128, 128), (128, 255, 128)]
-        for b in raw["boxes"]:
-            color = bgr_colors[b["class_id"] % 15]
-            cv2.rectangle(orig, (int(b["x1"]), int(b["y1"])),
-                          (int(b["x2"]), int(b["y2"])), color, 2)
-            label = f'{b["class_name"]} {b["confidence"]:.2f}'
-            cv2.putText(orig, label, (int(b["x1"]), max(int(b["y1"]) - 5, 15)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
-        cv2.imwrite(result_path, orig)
+        _draw_annotations(orig, raw["boxes"])
+        _imwrite(result_path, orig)
     else:
-        cv2.imwrite(result_path, np.zeros((256, 256, 3), dtype=np.uint8))
+        _imwrite(result_path, np.zeros((256, 256, 3), dtype=np.uint8))
 
-    minio_service.upload_file(result_path, f"results/{result_filename}", "image/jpeg")
+    minio_service.upload_file(str(result_path), f"results/{result_filename}", "image/jpeg")
 
     image_url = get_file_url(filename, "static/uploads")
     result_url = get_file_url(result_filename, "static/results")
+    preview_url = _generate_tif_preview(image_path)
+    if not preview_url and image_path.suffix.lower() not in GEOSPATIAL:
+        preview_url = image_url
+    preview_url = preview_url or ""
 
     boxes = [DetectionBox(**b) for b in raw["boxes"]]
     det_result = DetectionResult(
-        detection_id=raw["detection_id"], image_url=image_url, result_image_url=result_url,
+        detection_id=raw["detection_id"], image_url=image_url,
+        result_image_url=result_url, preview_image_url=preview_url,
         boxes=boxes, total_objects=raw["total_objects"],
         detection_time=raw["detection_time"], model_name=raw["model_name"],
         created_at=datetime.now(),
     )
     save_record(det_result, image_url, result_url, filename, raw["model_name"],
-                current_user.username, current_user.id)
+                current_user.username, current_user.id, preview_image_url=preview_url)
 
+    logger.info("单图检测完成: %d 个目标, 耗时 %.2fs", raw["total_objects"], raw["detection_time"])
     return SingleDetectionResponse(success=True, message="检测成功", data=det_result)
 
 
@@ -173,56 +271,70 @@ async def detect_batch_images(
 
     t_total = time.time()
     results = []
-    engine_files = [("files", (f.filename, await f.read(), f.content_type or "image/jpeg")) for f in files]
+
+    # 先保存所有文件到本地及 MinIO；引擎会自己生成文件名，我们按 index 配对
+    saved_info = []  # [(original_name, our_saved_filename), ...]
+    engine_files = []
+    for f in files:
+        content = await f.read()
+        ext = Path(f.filename).suffix.lower() or ".jpg"
+        fn = f"{uuid.uuid4().hex}{ext}"
+        fp = Paths.uploads() / fn
+        with open(fp, "wb") as wf:
+            wf.write(content)
+        minio_service.upload_file(str(fp), f"uploads/{fn}", f.content_type or "image/jpeg")
+        saved_info.append((f.filename, fn))
+        engine_files.append(("files", (f.filename, content, f.content_type or "image/jpeg")))
+
     data = {"model_name": model_name, "conf_threshold": conf_threshold,
             "iou_threshold": iou_threshold, "use_sahi": str(use_sahi).lower()}
 
     async with httpx.AsyncClient(timeout=300) as c:
         r = await c.post(f"{DET_ENGINE}/detect/batch", files=engine_files, data=data)
     if r.status_code != 200:
-        raise HTTPException(r.status_code, detail=f"检测引擎错误: {r.text}")
+        logger.error("批量检测引擎返回 %d: %s", r.status_code, r.text[:200])
+        raise HTTPException(502, "检测服务暂时不可用，请稍后重试")
     items = r.json()["results"]
 
-    bgr_colors = [(0, 0, 255), (0, 255, 0), (255, 0, 0), (0, 255, 255),
-                   (255, 255, 0), (255, 0, 255), (128, 0, 255), (255, 128, 0),
-                   (0, 128, 255), (128, 255, 0), (0, 255, 128), (255, 0, 128),
-                   (128, 128, 255), (255, 128, 128), (128, 255, 128)]
-
-    for item in items:
+    # 引擎按顺序处理，results[i] 对应 saved_info[i]
+    for i, item in enumerate(items):
         if "error" in item:
             continue
-        img_path = os.path.join(settings.UPLOAD_DIR, item.get("filename", ""))
+        orig_name, saved_fn = saved_info[i]
+        img_path = Paths.uploads() / saved_fn
         result_filename = f"result_{item['detection_id'][:8]}.jpg"
-        result_path = os.path.join(settings.RESULT_DIR, result_filename)
-        orig = cv2.imread(img_path) if os.path.exists(img_path) else None
+        result_path = Paths.results() / result_filename
+        orig = _imread(img_path) if img_path.exists() else None
         if orig is not None:
-            for b in item["boxes"]:
-                color = bgr_colors[b["class_id"] % 15]
-                cv2.rectangle(orig, (int(b["x1"]), int(b["y1"])),
-                              (int(b["x2"]), int(b["y2"])), color, 2)
-            cv2.imwrite(result_path, orig)
+            _draw_annotations(orig, item["boxes"])
+            _imwrite(result_path, orig)
         else:
-            cv2.imwrite(result_path, np.zeros((256, 256, 3), dtype=np.uint8))
-        minio_service.upload_file(result_path, f"results/{result_filename}", "image/jpeg")
+            _imwrite(result_path, np.zeros((256, 256, 3), dtype=np.uint8))
+        minio_service.upload_file(str(result_path), f"results/{result_filename}", "image/jpeg")
 
-        fn = item.get("filename", "")
-        img_url = get_file_url(fn, "static/uploads") if fn else ""
+        img_url = get_file_url(saved_fn, "static/uploads")
         res_url = get_file_url(result_filename, "static/results")
+        preview_url = _generate_tif_preview(img_path)
+        if not preview_url and img_path.suffix.lower() not in GEOSPATIAL:
+            preview_url = img_url
+        preview_url = preview_url or ""
         boxes = [DetectionBox(**b) for b in item["boxes"]]
 
         det_result = DetectionResult(
-            detection_id=item["detection_id"], image_url=img_url, result_image_url=res_url,
+            detection_id=item["detection_id"], image_url=img_url,
+            result_image_url=res_url, preview_image_url=preview_url,
             boxes=boxes, total_objects=item["total_objects"],
             detection_time=item["detection_time"], model_name=item["model_name"],
             created_at=datetime.now(),
         )
-        save_record(det_result, img_url, res_url, fn, item["model_name"],
-                    current_user.username, current_user.id)
+        save_record(det_result, img_url, res_url, saved_fn, item["model_name"],
+                    current_user.username, current_user.id, preview_image_url=preview_url)
 
         results.append(BatchDetectionItem(
-            filename=fn, image_url=img_url, result_image_url=res_url,
+            filename=orig_name, image_url=img_url, result_image_url=res_url,
+            preview_image_url=preview_url,
             total_objects=item["total_objects"], detection_time=item["detection_time"],
-            boxes=boxes,
+            boxes=boxes, detection_id=item["detection_id"],
         ))
 
     total_time = round(time.time() - t_total, 3)
@@ -270,10 +382,10 @@ async def download_results(data: dict):
             if not rec:
                 continue
             parsed = urlparse(rec.get("result_image_url", ""))
-            rp = os.path.join(settings.RESULT_DIR, os.path.basename(parsed.path))
-            if os.path.exists(rp):
-                base = os.path.splitext(rec.get("filename", "image"))[0]
-                zf.write(rp, f"{base}_{rid[:8]}.jpg")
+            rp = Paths.results() / Path(parsed.path).name
+            if rp.exists():
+                base = Path(rec.get("filename", "image")).stem
+                zf.write(str(rp), f"{base}_{rid[:8]}.jpg")
                 added += 1
     buf.seek(0)
     return StreamingResponse(buf, media_type="application/zip",
@@ -284,7 +396,7 @@ async def download_results(data: dict):
 
 @router.get("/statistics", response_model=EvaluationResponse)
 async def get_statistics(current_user: User = Depends(get_current_user)):
-    all_records = get_all_records(username=current_user.username)
+    all_records = get_all_records(user_id=current_user.id)
     if not all_records:
         return EvaluationResponse(success=True, message="暂无检测数据", data=None)
 
@@ -339,7 +451,7 @@ async def get_statistics(current_user: User = Depends(get_current_user)):
 async def get_history(page: int = Query(1, ge=1), page_size: int = Query(10, ge=1, le=100),
                       keyword: str = Query(""), status: str = Query(""),
                       current_user: User = Depends(get_current_user)):
-    records, total = list_records(page, page_size, keyword, status, username=current_user.username)
+    records, total = list_records(page, page_size, keyword, status, user_id=current_user.id)
     return HistoryListResponse(success=True, message="获取成功",
                                data=[HistoryRecord(**r) for r in records],
                                total=total, page=page, page_size=page_size)
@@ -352,7 +464,9 @@ async def get_history_detail(record_id: str):
         raise HTTPException(404, "记录不存在")
     boxes = [DetectionBox(**b) for b in r.get("boxes", [])]
     detail = DetectionResult(detection_id=r.get("detection_id", r["id"]),
-                             image_url=r.get("image_url", ""), result_image_url=r.get("result_image_url", ""),
+                             image_url=r.get("image_url", ""),
+                             result_image_url=r.get("result_image_url", ""),
+                             preview_image_url=r.get("preview_image_url", ""),
                              boxes=boxes, total_objects=r.get("total_objects", 0),
                              detection_time=r.get("detection_time", 0.0),
                              model_name=r.get("model_name", ""),
@@ -370,20 +484,20 @@ async def delete_history_record(record_id: str):
 @router.get("/targets/list", response_model=TargetListResponse)
 async def get_target_list():
     targets = [
-        TargetItem(id=0, name="plane", chinese_name="飞机", description="固定翼飞机、客机、战斗机等"),
-        TargetItem(id=1, name="ship", chinese_name="船舶", description="货船、渔船、军舰等"),
-        TargetItem(id=2, name="storage-tank", chinese_name="储罐", description="储油罐、储气罐等圆形储罐"),
-        TargetItem(id=3, name="baseball-diamond", chinese_name="棒球场", description="棒球场、垒球场等"),
-        TargetItem(id=4, name="tennis-court", chinese_name="网球场", description="网球场"),
-        TargetItem(id=5, name="basketball-court", chinese_name="篮球场", description="篮球场"),
-        TargetItem(id=6, name="ground-track-field", chinese_name="田径场", description="田径运动场"),
-        TargetItem(id=7, name="harbor", chinese_name="港口", description="港口、码头"),
-        TargetItem(id=8, name="bridge", chinese_name="桥梁", description="公路桥、铁路桥等"),
-        TargetItem(id=9, name="large-vehicle", chinese_name="大型车辆", description="卡车、公交车等大型车辆"),
-        TargetItem(id=10, name="small-vehicle", chinese_name="小型车辆", description="轿车、SUV等小型车辆"),
-        TargetItem(id=11, name="helicopter", chinese_name="直升机", description="各类直升机"),
-        TargetItem(id=12, name="roundabout", chinese_name="环岛", description="交通环岛、转盘"),
-        TargetItem(id=13, name="soccer-ball-field", chinese_name="足球场", description="足球场"),
-        TargetItem(id=14, name="swimming-pool", chinese_name="游泳池", description="游泳池"),
+        TargetItem(id=0, name="plane"),
+        TargetItem(id=1, name="ship"),
+        TargetItem(id=2, name="storage-tank"),
+        TargetItem(id=3, name="baseball-diamond"),
+        TargetItem(id=4, name="tennis-court"),
+        TargetItem(id=5, name="basketball-court"),
+        TargetItem(id=6, name="ground-track-field"),
+        TargetItem(id=7, name="harbor"),
+        TargetItem(id=8, name="bridge"),
+        TargetItem(id=9, name="large-vehicle"),
+        TargetItem(id=10, name="small-vehicle"),
+        TargetItem(id=11, name="helicopter"),
+        TargetItem(id=12, name="roundabout"),
+        TargetItem(id=13, name="soccer-ball-field"),
+        TargetItem(id=14, name="swimming-pool"),
     ]
     return TargetListResponse(success=True, message="获取成功", data=targets)

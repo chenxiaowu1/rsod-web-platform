@@ -2,22 +2,22 @@
   <div class="detection-page">
     <div class="page-header">
       <div class="header-left">
-        <h1 class="page-title">智能检测</h1>
-        <p class="page-subtitle">上传遥感影像，立即识别多类目标</p>
+        <h1 class="page-title">{{ $t('detection.title') }}</h1>
+        <p class="page-subtitle">{{ $t('detection.subtitle') }}</p>
       </div>
       <div class="header-right">
         <div class="model-config-box">
-          <span class="config-label">模型配置</span>
+          <span class="config-label">{{ $t('detection.modelConfig') }}</span>
           <div class="config-controls">
             <el-popover placement="bottom" :width="280" trigger="hover">
               <template #reference>
                 <div class="sahi-toggle" @click="useSahi = !useSahi" :class="{ on: useSahi }">
                   <span class="sahi-dot"></span>
-                  <span class="sahi-label">SAHI 切片</span>
+                  <span class="sahi-label">{{ $t('detection.sahiSlice') }}</span>
                 </div>
               </template>
               <div class="sahi-explain">
-                <p><strong>SAHI 切片推理</strong> — 将大图切成 640×640 小块逐块检测后合并。</p>
+                <p><strong>{{ $t('detection.sahiSlice') }}推理</strong> — 将大图切成 640×640 小块逐块检测后合并。</p>
                 <p style="margin-top:6px"><span class="tag-rec">推荐开启</span> 影像边长 > 2000px，切片推理提升小目标检出率</p>
                 <p style="margin-top:4px"><span class="tag-off">建议关闭</span> 影像边长 ≤ 2000px，标准推理即可</p>
               </div>
@@ -43,12 +43,12 @@
     <!-- 阈值调节 -->
     <div class="threshold-bar">
       <div class="threshold-item">
-        <span class="threshold-label">置信度阈值</span>
+        <span class="threshold-label">{{ $t('detection.confThreshold') }}</span>
         <el-slider v-model="confThreshold" :min="0.1" :max="0.9" :step="0.05" :show-tooltip="true" class="threshold-slider" />
         <span class="threshold-value">{{ confThreshold.toFixed(2) }}</span>
       </div>
       <div class="threshold-item">
-        <span class="threshold-label">IoU 阈值</span>
+        <span class="threshold-label">{{ $t('detection.iouThreshold') }}</span>
         <el-slider v-model="iouThreshold" :min="0.1" :max="0.9" :step="0.05" :show-tooltip="true" class="threshold-slider" />
         <span class="threshold-value">{{ iouThreshold.toFixed(2) }}</span>
       </div>
@@ -72,27 +72,27 @@
     </div>
 
     <!-- 上传区域 -->
-    <div class="upload-zone" v-if="activeTab === 'single'" @click="$refs.singleInput.click()">
+    <div class="upload-zone" v-if="activeTab === 'single'" @click="handleUploadClick('single')">
       <input ref="singleInput" type="file" :accept="functionTabs[0].accept" class="hidden-input" @change.stop="(e) => handleFileChange(e, 'single')" />
       <el-icon :size="28"><Picture /></el-icon>
-      <span class="upload-text">点击此处上传遥感影像</span>
-      <span class="upload-hint">支持 JPG / PNG / TIF / TIFF</span>
+      <span class="upload-text">{{ $t('detection.uploadHint') }}</span>
+      <span class="upload-hint">{{ $t('detection.uploadFormats') }}</span>
     </div>
-    <div class="upload-zone" v-if="activeTab === 'batch'" @click="$refs.folderInput.click()">
+    <div class="upload-zone" v-if="activeTab === 'batch'" @click="handleUploadClick('batch')">
       <input ref="folderInput" type="file" :accept="functionTabs[1].accept" webkitdirectory class="hidden-input" @change.stop="(e) => handleFileChange(e, 'batch')" />
       <el-icon :size="28"><FolderOpened /></el-icon>
-      <span class="upload-text">点击此处上传整个文件夹</span>
-      <span class="upload-hint">支持 JPG / PNG / TIF / TIFF</span>
+      <span class="upload-text">点击此处{{ $t('detection.batchModeDesc') }}</span>
+      <span class="upload-hint">{{ $t('detection.uploadFormats') }}</span>
     </div>
 
     <!-- 下载栏 -->
     <div class="download-bar" v-if="(activeTab === 'single' && singleResult) || (activeTab === 'batch' && batchDone > 0)">
-      <span class="download-bar-label">结果图下载</span>
+      <span class="download-bar-label">{{ $t('detection.downloadResult') }}</span>
       <el-button v-if="activeTab === 'single' && singleResultImg" size="small" type="primary" @click="downloadResult(singleResultImg)">
-        <el-icon :size="14"><Download /></el-icon> 下载结果图
+        <el-icon :size="14"><Download /></el-icon> {{ $t('detection.downloadResult') }}
       </el-button>
       <el-button v-if="activeTab === 'batch' && batchDone > 0" size="small" type="primary" @click="downloadAllResults">
-        <el-icon :size="14"><Download /></el-icon> 下载全部结果图 ({{ batchDone }} 张 · ZIP)
+        <el-icon :size="14"><Download /></el-icon> {{ $t('detection.downloadAllResults') }} ({{ batchDone }} 张 · ZIP)
       </el-button>
     </div>
 
@@ -103,27 +103,27 @@
       <template v-if="activeTab === 'single'">
         <div class="left-panel">
           <div class="panel-topbar">
-            <span class="panel-label">检测预览</span>
+            <span class="panel-label">{{ $t('detection.preview') }}</span>
             <div class="panel-status" style="display:flex;align-items:center;gap:10px">
-              <span v-if="loading" class="status processing"><span class="status-dot"></span>检测中...</span>
-              <span v-else-if="singleResult" class="status done"><span class="status-dot"></span>检测完成</span>
-              <span v-else class="status idle"><span class="status-dot"></span>等待上传</span>
+              <span v-if="loading" class="status processing"><span class="status-dot"></span>{{ $t('detection.detecting') }}</span>
+              <span v-else-if="singleResult" class="status done"><span class="status-dot"></span>{{ $t('detection.done') }}</span>
+              <span v-else class="status idle"><span class="status-dot"></span>{{ $t('detection.waitingUpload') }}</span>
               <el-button v-if="singleResult || singleOriginal" size="small" @click="resetSingle" circle><el-icon :size="14"><Close /></el-icon></el-button>
             </div>
           </div>
 
-          <!-- 有内容：显示原图+结果图对比 -->
+          <!-- 检测完成或有预览时显示 -->
           <div class="image-compare-single" v-if="singleResult || singleOriginal">
             <div class="image-card">
               <img v-if="singleOriginal" :src="singleOriginal" class="compare-image" />
-              <div v-else class="placeholder"><el-icon :size="40"><Picture /></el-icon><span>原始图片</span></div>
-              <div class="image-label">原图</div>
+              <div v-else class="placeholder"><el-icon :size="40"><Picture /></el-icon><span>{{ $t('detection.originalImage') }}</span></div>
+              <div class="image-label">{{ $t('detection.original') }}</div>
             </div>
             <div class="image-card">
               <img v-if="singleResultImg" :src="singleResultImg" class="compare-image" />
-              <div v-else class="placeholder"><el-icon :size="40"><Aim /></el-icon><span>检测结果</span></div>
-              <div class="image-label result-label">检测结果</div>
-              <div v-if="singleResult" class="detection-badge">{{ singleResult.total_objects }}</div>
+              <div v-else class="placeholder"><el-icon :size="40"><Aim /></el-icon><span>{{ $t('detection.result') }}</span></div>
+              <div class="image-label result-label">{{ $t('detection.result') }}</div>
+              <div class="detection-badge">{{ singleResult.total_objects }}</div>
               <el-button
                 v-if="singleResultImg"
                 class="download-btn"
@@ -136,21 +136,36 @@
             </div>
           </div>
 
+          <!-- 检测中：显示文件信息 -->
+          <div class="image-compare-single" v-else-if="singleOriginal">
+            <div class="image-card">
+              <el-icon :size="36"><Picture /></el-icon>
+              <div class="image-label">{{ $t('detection.originalImage') }}</div>
+              <p class="image-filename">{{ store.singleFile?.name || '-' }}</p>
+              <p class="image-filesize">{{ store.singleFile ? formatFileSize(store.singleFile.size) : '' }}</p>
+            </div>
+            <div class="image-card">
+              <el-icon :size="36"><Aim /></el-icon>
+              <div class="image-label">{{ $t('detection.result') }}</div>
+              <p class="image-filename">{{ $t('detection.detecting') }}</p>
+            </div>
+          </div>
+
           <!-- 空状态 -->
           <div v-else class="batch-empty">
             <el-icon :size="48"><Picture /></el-icon>
-            <p>点击上方「单图检测」上传遥感影像进行检测</p>
+            <p>点击上方「{{ $t('detection.singleMode') }}」{{ $t('detection.emptyHint') }}</p>
           </div>
         </div>
 
         <div class="right-panel" v-if="singleResult || singleOriginal">
           <div class="info-card">
-            <div class="info-row"><span class="info-label">检测模型</span><span class="info-value accent">{{ selectedModel }}</span></div>
-            <div class="info-row"><span class="info-label">检测耗时</span><span class="info-value mono">{{ singleResult?.detection_time || '-' }}s</span></div>
-            <div class="info-row"><span class="info-label">检测数量</span><span class="info-value mono">{{ singleResult?.total_objects || 0 }}</span></div>
+            <div class="info-row"><span class="info-label">{{ $t('detection.model') }}</span><span class="info-value accent">{{ selectedModel }}</span></div>
+            <div class="info-row"><span class="info-label">{{ $t('detection.time') }}</span><span class="info-value mono">{{ singleResult?.detection_time || '-' }}s</span></div>
+            <div class="info-row"><span class="info-label">{{ $t('detection.count') }}</span><span class="info-value mono">{{ singleResult?.total_objects || 0 }}</span></div>
           </div>
           <div class="export-row" v-if="singleResult && singleResult.boxes.length">
-            <span class="export-label">导出标注</span>
+            <span class="export-label">{{ $t('detection.exportAnno') }}</span>
             <div class="export-btns">
               <el-button size="small" @click="doExport(singleResult.detection_id, 'coco')">COCO</el-button>
               <el-button size="small" @click="doExport(singleResult.detection_id, 'yolo')">YOLO</el-button>
@@ -158,16 +173,16 @@
             </div>
           </div>
           <div class="result-card">
-            <div class="card-header"><span class="card-title">识别清单</span><span v-if="singleResult" class="card-badge">{{ singleResult.boxes.length }}</span></div>
+            <div class="card-header"><span class="card-title">{{ $t('detection.detectionList') }}</span><span v-if="singleResult" class="card-badge">{{ singleResult.boxes.length }}</span></div>
             <div v-if="singleResult && singleResult.boxes.length" class="box-list">
               <div v-for="(box, idx) in singleResult.boxes" :key="idx" class="box-item">
                 <div class="box-left"><span class="box-index">{{ String(idx+1).padStart(2,'0') }}</span><span class="box-class">{{ box.class_name }}</span></div>
                 <span class="box-conf">{{ (box.confidence*100).toFixed(1) }}%</span>
               </div>
             </div>
-            <div v-else class="box-empty">暂无检测目标</div>
+            <div v-else class="box-empty">{{ $t('detection.noObjects') }}</div>
           </div>
-          <el-button class="reset-btn" @click="resetSingle"><el-icon><Refresh /></el-icon>重新检测</el-button>
+          <el-button class="reset-btn" @click="reDetect"><el-icon><Refresh /></el-icon>{{ $t('detection.reDetect') }}</el-button>
         </div>
       </template>
 
@@ -177,18 +192,18 @@
           <!-- 顶部状态栏 -->
           <div class="panel-topbar">
             <span class="panel-label">
-              批量检测
+              {{ $t('detection.batchMode') }}
               <span class="panel-count">共 {{ batchFiles.length }} 张</span>
             </span>
             <div class="panel-status" style="display:flex;align-items:center;gap:10px">
               <span v-if="batchLoading" class="status processing">
-                <span class="status-dot"></span>检测中 {{ batchDone }}/{{ batchFiles.length }}...
+                <span class="status-dot"></span>{{ $t('detection.detecting') }} batchDone }}/{{ batchFiles.length }}...
                 <el-button size="small" type="danger" @click="stopDetection" style="margin-left:10px">停止</el-button>
               </span>
               <span v-else-if="batchDone > 0" class="status done">
                 <span class="status-dot"></span>全部完成 · {{ batchTotalObjects }} 个目标 · {{ batchTotalTime }}s
               </span>
-              <span v-else class="status idle"><span class="status-dot"></span>等待上传</span>
+              <span v-else class="status idle"><span class="status-dot"></span>{{ $t('detection.waitingUpload') }}</span>
               <el-button v-if="batchFiles.length" size="small" @click="resetBatch" circle><el-icon :size="14"><Close /></el-icon></el-button>
             </div>
           </div>
@@ -217,7 +232,7 @@
           <!-- 空状态 -->
           <div v-else class="batch-empty">
             <el-icon :size="48"><FolderOpened /></el-icon>
-            <p>点击上方「批量检测」上传整个文件夹进行检测</p>
+            <p>点击上方「{{ $t('detection.batchMode') }}」{{ $t('detection.batchModeDesc') }}进行检测</p>
           </div>
         </div>
 
@@ -225,11 +240,11 @@
         <div class="right-panel" v-if="selectedBatchItem">
           <div class="info-card">
             <div class="info-row"><span class="info-label">文件名</span><span class="info-value" style="font-size:12px">{{ selectedBatchItem.filename }}</span></div>
-            <div class="info-row"><span class="info-label">检测耗时</span><span class="info-value mono">{{ selectedBatchItem.detection_time || '-' }}s</span></div>
-            <div class="info-row"><span class="info-label">检测数量</span><span class="info-value mono">{{ selectedBatchItem.total_objects || 0 }}</span></div>
+            <div class="info-row"><span class="info-label">{{ $t('detection.time') }}</span><span class="info-value mono">{{ selectedBatchItem.detection_time || '-' }}s</span></div>
+            <div class="info-row"><span class="info-label">{{ $t('detection.count') }}</span><span class="info-value mono">{{ selectedBatchItem.total_objects || 0 }}</span></div>
           </div>
           <div class="export-row" v-if="selectedBatchItem.boxes && selectedBatchItem.boxes.length && selectedBatchItem.detection_id">
-            <span class="export-label">导出标注</span>
+            <span class="export-label">{{ $t('detection.exportAnno') }}</span>
             <div class="export-btns">
               <el-button size="small" @click="doExport(selectedBatchItem.detection_id, 'coco')">COCO</el-button>
               <el-button size="small" @click="doExport(selectedBatchItem.detection_id, 'yolo')">YOLO</el-button>
@@ -240,12 +255,12 @@
           <!-- 原图 + 结果图对比 -->
           <div class="image-compare-mini" v-if="selectedBatchItem.result_url">
             <div class="mini-img-card">
-              <img v-if="selectedBatchItem.original_url" :src="selectedBatchItem.original_url" class="mini-img" />
-              <div class="mini-label">原图</div>
+              <img v-if="selectedBatchItem.preview" :src="selectedBatchItem.preview" class="mini-img" />
+              <div class="mini-label">{{ $t('detection.original') }}</div>
             </div>
             <div class="mini-img-card">
               <img :src="selectedBatchItem.result_url" class="mini-img" />
-              <div class="mini-label result-label">检测结果</div>
+              <div class="mini-label result-label">{{ $t('detection.result') }}</div>
               <el-button
                 class="mini-download-btn"
                 size="small"
@@ -258,16 +273,16 @@
           </div>
 
           <div class="result-card">
-            <div class="card-header"><span class="card-title">识别清单</span><span v-if="selectedBatchItem.boxes" class="card-badge">{{ selectedBatchItem.boxes.length }}</span></div>
+            <div class="card-header"><span class="card-title">{{ $t('detection.detectionList') }}</span><span v-if="selectedBatchItem.boxes" class="card-badge">{{ selectedBatchItem.boxes.length }}</span></div>
             <div v-if="selectedBatchItem.boxes && selectedBatchItem.boxes.length" class="box-list">
               <div v-for="(box, idx) in selectedBatchItem.boxes" :key="idx" class="box-item">
                 <div class="box-left"><span class="box-index">{{ String(idx+1).padStart(2,'0') }}</span><span class="box-class">{{ box.class_name }}</span></div>
                 <span class="box-conf">{{ (box.confidence*100).toFixed(1) }}%</span>
               </div>
             </div>
-            <div v-else class="box-empty">暂无检测目标</div>
+            <div v-else class="box-empty">{{ $t('detection.noObjects') }}</div>
           </div>
-          <el-button class="reset-btn" @click="resetBatch"><el-icon><Refresh /></el-icon>重新检测</el-button>
+          <el-button class="reset-btn" @click="resetBatch"><el-icon><Refresh /></el-icon>{{ $t('detection.reDetect') }}</el-button>
         </div>
       </template>
 
@@ -276,40 +291,56 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from "vue";
+import { ref, onMounted, watch, computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { ElMessage } from "element-plus";
-import { detectSingleImage, getModels, switchModel, exportDetection, previewImage, downloadResultsZip } from "../api/detection";
+import { detectSingleImage, detectBatchImages, getModels, switchModel, exportDetection, downloadResultsZip, previewImage } from "../api/detection";
 import { requireLogin } from "../utils/request";
+import { getSession, authVersion } from "../utils/auth";
+import { useExport } from "../composables/useExport";
+import { useDetectionStore } from "../stores/detectionStore";
 import { Picture, Aim, Close, Folder, Refresh, FolderOpened, Download } from "@element-plus/icons-vue";
 
-const selectedModel = ref("");
+const { t } = useI18n();
+const { doExport } = useExport();
+const store = useDetectionStore();
+
+// 退出登录后自动清空检测状态
+watch(authVersion, () => {
+  if (!getSession()) {
+    store.clearAll();
+  }
+});
+
+// 销毁时清理（非 store 持有的临时状态）
 const availableModels = ref([]);
-const activeTab = ref("single");
 const loading = ref(false);
-const confThreshold = ref(0.5);
-const iouThreshold = ref(0.45);
-const useSahi = ref(false);
-const singleOriginal = ref(sessionStorage.getItem('rsod_single_original') || "");
-const singleResultImg = ref(sessionStorage.getItem('rsod_single_result_img') || "");
-const singleResult = ref(JSON.parse(sessionStorage.getItem('rsod_single_result') || 'null'));
+const batchLoading = ref(false);
+const stopRequested = ref(false);
+const currentAbortController = ref(null);
 const singleInput = ref(null);
 const folderInput = ref(null);
 
-// ── 批量状态 ──
-const batchFiles = ref([]);
-const batchLoading = ref(false);
-const batchDone = ref(0);
-const batchCurrentIdx = ref(-1);
-const batchTotalObjects = ref(0);
-const batchTotalTime = ref(0);
-const batchSelectedIdx = ref(-1);
-const stopRequested = ref(false);
-const currentAbortController = ref(null);
+// 从 store 取引用便于模板使用
+const selectedModel = computed({ get: () => store.selectedModel, set: (v) => { store.selectedModel = v; } });
+const confThreshold = computed({ get: () => store.confThreshold, set: (v) => { store.confThreshold = v; } });
+const iouThreshold = computed({ get: () => store.iouThreshold, set: (v) => { store.iouThreshold = v; } });
+const useSahi = computed({ get: () => store.useSahi, set: (v) => { store.useSahi = v; } });
+const activeTab = computed({ get: () => store.activeTab, set: (v) => { store.activeTab = v; } });
+const singleOriginal = computed({ get: () => store.singleOriginal, set: (v) => { store.singleOriginal = v; } });
+const singleResultImg = computed({ get: () => store.singleResultImg, set: (v) => { store.singleResultImg = v; } });
+const singleResult = computed({ get: () => store.singleResult, set: (v) => { store.singleResult = v; } });
+const batchFiles = computed({ get: () => store.batchFiles, set: (v) => { store.batchFiles = v; } });
+const batchDone = computed({ get: () => store.batchDone, set: (v) => { store.batchDone = v; } });
+const batchCurrentIdx = computed({ get: () => store.batchCurrentIdx, set: (v) => { store.batchCurrentIdx = v; } });
+const batchTotalObjects = computed({ get: () => store.batchTotalObjects, set: (v) => { store.batchTotalObjects = v; } });
+const batchTotalTime = computed({ get: () => store.batchTotalTime, set: (v) => { store.batchTotalTime = v; } });
+const batchSelectedIdx = computed({ get: () => store.batchSelectedIdx, set: (v) => { store.batchSelectedIdx = v; } });
 
-const functionTabs = [
-  { key: "single", name: "单图检测", desc: "识别单张遥感影像", icon: Picture, accept: "image/*,.tif,.tiff" },
-  { key: "batch", name: "批量检测", desc: "上传整个文件夹", icon: Folder, accept: "image/*,.tif,.tiff" },
-];
+const functionTabs = computed(() => [
+  { key: "single", name: t("detection.singleMode"), desc: t("detection.singleModeDesc"), icon: Picture, accept: "image/*,.tif,.tiff" },
+  { key: "batch", name: t("detection.batchMode"), desc: t("detection.batchModeDesc"), icon: Folder, accept: "image/*,.tif,.tiff" },
+]);
 
 const selectedBatchItem = ref(null);
 
@@ -322,66 +353,91 @@ const resolveUrl = (url) => {
   return `http://localhost:8000${url}`;
 };
 
-// ── 事件处理 ──
-const handleFileChange = async (event, tabKey) => {
-  const files = event.target.files;
-  if (!files || !files.length) return;
-  if (!(await requireLogin())) { event.target.value = ""; return; }
+// ── 上传入口（统一登录检查）──
+// 已登录：直接弹文件框；未登录：仅弹登录框，不自动继续
+const handleUploadClick = (mode) => {
+  if (getSession()) {
+    mode === 'single' ? singleInput.value?.click() : folderInput.value?.click()
+    return
+  }
+  requireLogin()
+};
+
+// ── 文件选择回调 ──
+const handleFileChange = (event, tabKey) => {
+  const files = Array.from(event.target.files || []);
+  if (!files.length) return;
+  event.target.value = "";
 
   if (tabKey === "single") {
-    await processSingle(files[0]);
+    processSingle(files[0]);
   } else {
-    await processBatch(Array.from(files));
+    processBatch(files);
   }
-  event.target.value = "";
 };
 
 const processSingle = async (file) => {
-  const isGeoTiff = file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff');
+  if (!file) return;
+  store.singleFile = file;
+  loading.value = true;
 
-  // TIF: 先调 preview 接口拿 PNG 预览，立即显示原图
-  if (isGeoTiff) {
-    const previewFd = new FormData();
-    previewFd.append("file", file);
+  // 即时预览：TIF 走后端预览接口转 PNG，其他格式直接用 blob URL
+  const isTif = file.name.toLowerCase().endsWith('.tif') || file.name.toLowerCase().endsWith('.tiff');
+  if (isTif) {
+    const pfd = new FormData();
+    pfd.append("file", file);
     try {
-      const previewRes = await previewImage(previewFd);
-      if (previewRes.success) {
-        singleOriginal.value = resolveUrl(previewRes.data.preview_url);
+      const previewRes = await previewImage(pfd);
+      if (previewRes.success && previewRes.data.preview_url) {
+        store.singleOriginal = resolveUrl(previewRes.data.preview_url);
+      } else {
+        store.singleOriginal = "";  // TIF 预览生成失败，显示占位图标
+        ElMessage.warning("该 TIF 文件无法生成预览，检测仍可正常进行");
       }
-    } catch (e) { /* 预览失败不影响检测 */ }
+    } catch (e) {
+      store.singleOriginal = "";
+      ElMessage.warning("TIF 预览请求失败，检测仍可正常进行");
+    }
   } else {
-    singleOriginal.value = URL.createObjectURL(file);
+    store.singleOriginal = URL.createObjectURL(file);
   }
 
   const fd = new FormData();
   fd.append("file", file);
-  fd.append("model_name", selectedModel.value);
-  fd.append("conf_threshold", confThreshold.value);
-  fd.append("iou_threshold", iouThreshold.value);
-  fd.append("use_sahi", useSahi.value);
-  loading.value = true;
+  fd.append("model_name", store.selectedModel);
+  fd.append("conf_threshold", store.confThreshold);
+  fd.append("iou_threshold", store.iouThreshold);
+  fd.append("use_sahi", store.useSahi);
   try {
     const res = await detectSingleImage(fd);
     if (res.success) {
-      singleResult.value = res.data;
-      singleResultImg.value = resolveUrl(res.data.result_image_url);
-      singleOriginal.value = resolveUrl(res.data.image_url);
-      sessionStorage.setItem('rsod_single_original', singleOriginal.value);
-      sessionStorage.setItem('rsod_single_result_img', singleResultImg.value);
-      sessionStorage.setItem('rsod_single_result', JSON.stringify(res.data));
+      store.singleResult = res.data;
+      store.singleResultImg = resolveUrl(res.data.result_image_url);
+      if (res.data.preview_image_url) {
+        store.singleOriginal = resolveUrl(res.data.preview_image_url);
+      }
     }
   } catch (e) {
     ElMessage.error("检测失败");
   } finally { loading.value = false; }
 };
 
+const formatFileSize = (bytes) => {
+  if (!bytes) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let i = 0, size = bytes
+  while (size >= 1024 && i < units.length - 1) { size /= 1024; i++ }
+  return `${size.toFixed(1)} ${units[i]}`
+}
+
 const resetSingle = () => {
-  singleOriginal.value = "";
-  singleResultImg.value = "";
-  singleResult.value = null;
-  sessionStorage.removeItem('rsod_single_original');
-  sessionStorage.removeItem('rsod_single_result_img');
-  sessionStorage.removeItem('rsod_single_result');
+  store.resetSingle();
+};
+
+const reDetect = async () => {
+  if (store.singleFile) {
+    await processSingle(store.singleFile);
+  }
 };
 
 const downloadResult = async (url) => {
@@ -405,9 +461,9 @@ const downloadResult = async (url) => {
 // ── 批量 ──
 const processBatch = async (files) => {
   // 初始化
-  batchFiles.value = files.map(f => ({
+  store.batchFiles = files.map(f => ({
     filename: f.name,
-    preview: URL.createObjectURL(f),
+    preview: null,
     file: f,
     done: false,
     total_objects: 0,
@@ -417,59 +473,65 @@ const processBatch = async (files) => {
     original_url: "",
     detection_id: "",
   }));
-  batchSelectedIdx.value = -1;
+  store.batchSelectedIdx = -1;
   selectedBatchItem.value = null;
-  batchDone.value = 0;
-  batchTotalObjects.value = 0;
-  batchTotalTime.value = 0;
+  store.batchDone = 0;
+  store.batchTotalObjects = 0;
+  store.batchTotalTime = 0;
   stopRequested.value = false;
 
   const tStart = performance.now();
   batchLoading.value = true;
 
-  for (let i = 0; i < batchFiles.value.length; i++) {
-    if (stopRequested.value) break;
+  const fd = new FormData();
+  for (const f of files) {
+    fd.append("files", f);
+  }
+  fd.append("model_name", store.selectedModel);
+  fd.append("conf_threshold", store.confThreshold);
+  fd.append("iou_threshold", store.iouThreshold);
+  fd.append("use_sahi", store.useSahi);
 
-    batchCurrentIdx.value = i;
-    const item = batchFiles.value[i];
-    const fd = new FormData();
-    fd.append("file", item.file);
-    fd.append("model_name", selectedModel.value);
-    fd.append("conf_threshold", confThreshold.value);
-    fd.append("iou_threshold", iouThreshold.value);
-    fd.append("use_sahi", useSahi.value);
-    try {
-      const res = await detectSingleImage(fd);
-      if (res.success) {
+  try {
+    const res = await detectBatchImages(fd);
+    if (res.success && res.data) {
+      const results = Array.isArray(res.data) ? res.data : [];
+      for (let i = 0; i < results.length; i++) {
+        if (stopRequested.value) break;
+        store.batchCurrentIdx = i;
+        const item = store.batchFiles[i];
+        const r = results[i];
+        if (!r || r.error) {
+          item.done = true;
+          item.total_objects = 0;
+          continue;
+        }
         item.done = true;
-        item.total_objects = res.data.total_objects;
-        item.detection_time = res.data.detection_time;
-        item.boxes = res.data.boxes;
-        item.result_url = resolveUrl(res.data.result_image_url);
-        item.original_url = resolveUrl(res.data.image_url);
-        item.preview = item.original_url;
-        item.detection_id = res.data.detection_id;
-        batchTotalObjects.value += res.data.total_objects;
-        // 预加载原图+结果图，切换时两者同时出现
+        item.total_objects = r.total_objects || 0;
+        item.detection_time = r.detection_time || 0;
+        item.boxes = r.boxes || [];
+        item.result_url = resolveUrl(r.result_image_url);
+        item.original_url = resolveUrl(r.image_url);
+        item.preview = resolveUrl(r.preview_image_url) || item.original_url;
+        item.detection_id = r.detection_id || "";
+        store.batchTotalObjects += r.total_objects || 0;
         new Image().src = item.original_url;
         new Image().src = item.result_url;
+        store.batchDone = i + 1;
       }
-    } catch (e) {
-      item.done = true;
-      item.total_objects = 0;
-      item.boxes = [];
     }
-    batchDone.value = i + 1;
+  } catch (e) {
+    ElMessage.error("{{ $t('detection.batchMode') }}失败");
   }
 
-  batchTotalTime.value = ((performance.now() - tStart) / 1000).toFixed(1);
+  store.batchTotalTime = ((performance.now() - tStart) / 1000).toFixed(1);
   batchLoading.value = false;
-  batchCurrentIdx.value = -1;
+  store.batchCurrentIdx = -1;
 
-  const firstDone = batchFiles.value.find(f => f.done && f.total_objects > 0);
+  const firstDone = store.batchFiles.find(f => f.done && f.total_objects > 0);
   if (firstDone) {
-    const idx = batchFiles.value.indexOf(firstDone);
-    batchSelectedIdx.value = idx;
+    const idx = store.batchFiles.indexOf(firstDone);
+    store.batchSelectedIdx = idx;
     selectedBatchItem.value = firstDone;
   }
 };
@@ -480,7 +542,7 @@ const stopDetection = () => {
 };
 
 const clearImageCache = () => {
-  batchFiles.value.forEach(item => {
+  store.batchFiles.forEach(item => {
     if (item.preview && item.preview.startsWith('blob:')) {
       URL.revokeObjectURL(item.preview);
     }
@@ -489,7 +551,7 @@ const clearImageCache = () => {
 };
 
 const downloadAllResults = async () => {
-  const ids = batchFiles.value.filter(f => f.detection_id).map(f => f.detection_id);
+  const ids = store.batchFiles.filter(f => f.detection_id).map(f => f.detection_id);
   if (!ids.length) { ElMessage.error("没有可下载的结果图"); return; }
   try {
     const blob = await downloadResultsZip(ids);
@@ -508,13 +570,12 @@ const downloadAllResults = async () => {
 };
 
 const selectBatchItem = (idx) => {
-  if (batchSelectedIdx.value === idx) {
-    // 再点同一个取消选中
-    batchSelectedIdx.value = -1;
+  if (store.batchSelectedIdx === idx) {
+    store.batchSelectedIdx = -1;
     selectedBatchItem.value = null;
   } else {
-    batchSelectedIdx.value = idx;
-    selectedBatchItem.value = batchFiles.value[idx];
+    store.batchSelectedIdx = idx;
+    selectedBatchItem.value = store.batchFiles[idx];
   }
 };
 
@@ -525,7 +586,7 @@ onMounted(async () => {
     if (res.data && res.data.length) {
       availableModels.value = res.data;
       const loaded = res.data.find(m => m.loaded);
-      selectedModel.value = loaded ? loaded.key : res.data[0].key;
+      store.selectedModel = loaded ? loaded.key : res.data[0].key;
     }
   } catch (e) { /* use defaults */ }
 });
@@ -535,8 +596,8 @@ const onModelChange = async (key) => {
     const res = await switchModel(key);
     if (res.success) {
       ElMessage.success(res.message);
-      resetSingle();
-      resetBatch();
+      store.resetSingle();
+      store.resetBatch();
     } else {
       ElMessage.error(res.message);
     }
@@ -545,31 +606,9 @@ const onModelChange = async (key) => {
   }
 };
 
-const doExport = async (recordId, format) => {
-  try {
-    const blob = await exportDetection(recordId, format);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const extMap = { coco: "json", yolo: "txt", geojson: "geojson" };
-    a.download = `detection_${recordId.slice(0, 8)}.${extMap[format]}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    ElMessage.success(`已导出 ${format.toUpperCase()} 格式`);
-  } catch (e) {
-    ElMessage.error("导出失败");
-  }
-};
-
 const resetBatch = () => {
-  batchFiles.value = [];
-  batchSelectedIdx.value = -1;
+  store.resetBatch();
   selectedBatchItem.value = null;
-  batchDone.value = 0;
-  batchTotalObjects.value = 0;
-  batchTotalTime.value = 0;
 };
 </script>
 
@@ -581,7 +620,7 @@ const resetBatch = () => {
 .header-left .page-subtitle { font-size: 13px; color: var(--text-muted); }
 .model-select { width: 180px; }
 
-/* 模型配置框 */
+/* {{ $t('detection.modelConfig') }}框 */
 .model-config-box {
   display: flex; align-items: center; gap: 12px;
   padding: 8px 14px; background: var(--bg-card);

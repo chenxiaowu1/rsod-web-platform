@@ -131,13 +131,17 @@ body::before {
 .el-pagination button, .el-pager li { background: var(--bg-card) !important; color: var(--text-secondary) !important; border-radius: var(--radius-sm) !important; }
 .el-pager li.is-active { background: var(--accent) !important; color: var(--on-accent) !important; }
 
-.el-select-dropdown, .el-popper {
+.el-select-dropdown, .el-popper, .el-select__popper {
   background: var(--bg-card) !important; border: 1px solid var(--border-color) !important;
   border-radius: var(--radius-md) !important; box-shadow: var(--card-shadow) !important;
 }
 .el-select-dropdown__item { color: var(--text-primary) !important; font-size: 13px; }
 .el-select-dropdown__item:hover { background: var(--bg-card-hover) !important; }
 .el-select-dropdown__item.selected { color: var(--accent) !important; font-weight: 600; }
+.el-select .el-input__wrapper {
+  background: var(--bg-card) !important; border-color: var(--border-color) !important;
+  box-shadow: none !important;
+}
 
 .el-loading-mask { background: var(--bg-overlay) !important; }
 .el-message { background: var(--bg-card) !important; border: 1px solid var(--border-color) !important; border-radius: var(--radius-md) !important; }

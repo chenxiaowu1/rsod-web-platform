@@ -46,9 +46,12 @@
 from pydantic import BaseModel
 from typing import Optional
 import os
+from pathlib import Path
+from app.utils.paths import Paths
 
 
 class Settings(BaseModel):
+    ENV: str = "development"
     APP_NAME: str = "RSOD Detection Platform"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
@@ -77,6 +80,11 @@ class Settings(BaseModel):
     DB_PASSWORD: str = "rsod_password"
     DB_NAME: str = "rsod_db"
 
+    # Redis
+    REDIS_HOST: str = "localhost"
+    REDIS_PORT: int = 6379
+    REDIS_PASSWORD: str = ""
+
     # MinIO
     MINIO_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
@@ -84,7 +92,7 @@ class Settings(BaseModel):
     MINIO_BUCKET: str = "rsod-bucket"
 
     # JWT
-    SECRET_KEY: str = "change-me-in-production"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "change-me-in-production")
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
@@ -101,13 +109,30 @@ class Settings(BaseModel):
     def DATABASE_URL(self) -> str:
         return f"postgresql://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
 
+    @property
+    def REDIS_URL(self) -> str:
+        if self.REDIS_PASSWORD:
+            return f"redis://:{self.REDIS_PASSWORD}@{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+        return f"redis://{self.REDIS_HOST}:{self.REDIS_PORT}/0"
+
+    @property
+    def STATIC_DIR_PATH(self) -> Path:
+        return Paths.static()
+
+    @property
+    def UPLOAD_DIR_PATH(self) -> Path:
+        return Paths.uploads()
+
+    @property
+    def RESULT_DIR_PATH(self) -> Path:
+        return Paths.results()
+
 
 def get_settings() -> Settings:
     settings = Settings()
-    
+
     env_file = ".env"
     if os.path.exists(env_file):
-        # 修复：显式指定 UTF-8 编码，避免 Windows 下 GBK 解码错误
         with open(env_file, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
@@ -115,12 +140,10 @@ def get_settings() -> Settings:
                     key, value = line.split("=", 1)
                     if hasattr(settings, key):
                         try:
-                            # 尝试转换值类型为当前属性类型
                             current_type = type(getattr(settings, key))
                             if current_type == bool:
                                 setattr(settings, key, value.lower() in ("true", "1", "yes"))
                             elif current_type == list:
-                                # 简单处理：假设列表用逗号分隔，例如 ["a","b"]
                                 if value.startswith("[") and value.endswith("]"):
                                     import ast
                                     setattr(settings, key, ast.literal_eval(value))
@@ -129,9 +152,9 @@ def get_settings() -> Settings:
                             else:
                                 setattr(settings, key, current_type(value))
                         except (ValueError, SyntaxError):
-                            # 转换失败则保留默认值
                             pass
-    
+
+    Paths.set_env(settings.ENV)
     return settings
 
 

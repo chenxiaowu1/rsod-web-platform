@@ -3,9 +3,9 @@ YOLO 视频流检测引擎 — 独立 FastAPI 服务
 启动: conda activate shixi_video && python main.py
 """
 
-import os, sys, time, uuid, json
+import glob, os, shutil, subprocess, sys, time, uuid, json
 from pathlib import Path
-import cv2, torch
+import cv2, torch, numpy as np
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import FileResponse
 import uvicorn
@@ -26,12 +26,92 @@ MODEL_REGISTRY = {
 }
 
 CLASS_NAMES = {
+    # COCO 80 类 — 与 Ultralytics 官方 YOLO11 预训练模型一致
     0: "person", 1: "bicycle", 2: "car", 3: "motorcycle", 4: "airplane",
     5: "bus", 6: "train", 7: "truck", 8: "boat", 9: "traffic light",
     10: "fire hydrant", 11: "stop sign", 12: "parking meter", 13: "bench",
     14: "bird", 15: "cat", 16: "dog", 17: "horse", 18: "sheep", 19: "cow",
     20: "elephant", 21: "bear", 22: "zebra", 23: "giraffe",
+    24: "backpack", 25: "umbrella", 26: "handbag", 27: "tie",
+    28: "suitcase", 29: "frisbee", 30: "skis", 31: "snowboard",
+    32: "sports ball", 33: "kite", 34: "baseball bat", 35: "baseball glove",
+    36: "skateboard", 37: "surfboard", 38: "tennis racket", 39: "bottle",
+    40: "wine glass", 41: "cup", 42: "fork", 43: "knife", 44: "spoon",
+    45: "bowl", 46: "banana", 47: "apple", 48: "sandwich", 49: "orange",
+    50: "broccoli", 51: "carrot", 52: "hot dog", 53: "pizza", 54: "donut",
+    55: "cake", 56: "chair", 57: "couch", 58: "potted plant", 59: "bed",
+    60: "dining table", 61: "toilet", 62: "tv", 63: "laptop", 64: "mouse",
+    65: "remote", 66: "keyboard", 67: "cell phone", 68: "microwave",
+    69: "oven", 70: "toaster", 71: "sink", 72: "refrigerator", 73: "book",
+    74: "clock", 75: "vase", 76: "scissors", 77: "teddy bear",
+    78: "hair drier", 79: "toothbrush",
 }
+
+
+def find_ffmpeg_bin():
+    ffmpeg_bin = shutil.which("ffmpeg")
+    if ffmpeg_bin:
+        return ffmpeg_bin
+
+    local_app_data = os.environ.get("LOCALAPPDATA", "")
+    program_files = os.environ.get("ProgramFiles", "")
+    program_files_x86 = os.environ.get("ProgramFiles(x86)", "")
+    patterns = [
+        os.path.join(local_app_data, "Microsoft", "WinGet", "Links", "ffmpeg.exe"),
+        os.path.join(local_app_data, "Microsoft", "WinGet", "Packages", "*FFmpeg*", "**", "ffmpeg.exe"),
+        os.path.join(program_files, "ffmpeg", "**", "ffmpeg.exe"),
+        os.path.join(program_files_x86, "ffmpeg", "**", "ffmpeg.exe"),
+    ]
+    for pattern in patterns:
+        if pattern:
+            matches = glob.glob(pattern, recursive=True)
+            if matches:
+                return matches[0]
+    return ""
+
+
+def transcode_to_browser_mp4(source_path: str, target_path: str):
+    ffmpeg_bin = find_ffmpeg_bin()
+    if not ffmpeg_bin:
+        if source_path != target_path and os.path.exists(source_path):
+            os.replace(source_path, target_path)
+        return False
+
+    command = [
+        ffmpeg_bin,
+        "-y",
+        "-i",
+        source_path,
+        "-an",
+        "-c:v",
+        "libx264",
+        "-pix_fmt",
+        "yuv420p",
+        "-preset",
+        "veryfast",
+        "-movflags",
+        "+faststart",
+        target_path,
+    ]
+    completed = subprocess.run(command, capture_output=True, text=True)
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "ffmpeg transcode failed").strip()
+        raise RuntimeError(detail)
+
+    if source_path != target_path and os.path.exists(source_path):
+        os.remove(source_path)
+    return True
+
+
+def resolve_output_file(video_id: str):
+    direct_path = os.path.join(OUTPUT_DIR, video_id, "annotated.mp4")
+    if os.path.exists(direct_path):
+        return direct_path
+
+    matches = glob.glob(os.path.join(OUTPUT_DIR, "*", video_id, "annotated.mp4"))
+    if matches:
+        return matches[0]
+    return ""
 
 
 class VideoEngine:
@@ -64,15 +144,21 @@ class VideoEngine:
     def detect_video(self, video_path, model_key, conf=0.25, output_dir=None):
         self._ensure(model_key)
         t0 = time.time()
+        vid = uuid.uuid4().hex
         cap = cv2.VideoCapture(video_path)
         fps = cap.get(cv2.CAP_PROP_FPS) or 30
         w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
-        out_path = os.path.join(output_dir, "annotated.mp4")
+        vid_dir = os.path.join(output_dir or OUTPUT_DIR, vid)
+        os.makedirs(vid_dir, exist_ok=True)
+        out_path = os.path.join(vid_dir, "annotated.mp4")
+        raw_out_path = os.path.join(vid_dir, "annotated_raw.mp4")
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        writer = cv2.VideoWriter(out_path, fourcc, fps, (w, h))
+        writer = cv2.VideoWriter(raw_out_path, fourcc, fps, (w, h))
+        if not writer.isOpened():
+            raise RuntimeError("failed to create annotated video writer")
 
         all_boxes = []
         frame_idx = 0
@@ -101,10 +187,11 @@ class VideoEngine:
 
         cap.release()
         writer.release()
+        transcode_to_browser_mp4(raw_out_path, out_path)
 
         dt = round(time.time() - t0, 3)
         return {
-            "video_id": uuid.uuid4().hex,
+            "video_id": vid,
             "total_frames": frame_idx,
             "total_objects": len(all_boxes),
             "detection_time": dt,
@@ -154,10 +241,8 @@ async def detect_video(
     conf_threshold: float = Form(0.25),
 ):
     video_path, _ = await save_file(file)
-    out_dir = os.path.join(OUTPUT_DIR, uuid.uuid4().hex)
-    os.makedirs(out_dir, exist_ok=True)
     try:
-        result = engine.detect_video(video_path, model_key, conf_threshold, out_dir)
+        result = engine.detect_video(video_path, model_key, conf_threshold, OUTPUT_DIR)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -172,8 +257,148 @@ async def detect_video(
     }
 
 
+@app.post("/detect-frame")
+async def detect_frame(data: dict):
+    """实时帧检测 — 接收 base64 图片 + model_key，返回检测结果。"""
+    import base64
+
+    # ── 输入校验 ──
+    if "image" not in data or not data["image"]:
+        raise HTTPException(400, "缺少 image 字段（base64 图片数据）")
+    model_key = data.get("model_key", "yolo11m")
+    if model_key not in MODEL_REGISTRY:
+        raise HTTPException(400, f"无效模型: {model_key}，可选: {list(MODEL_REGISTRY.keys())}")
+    conf = float(data.get("conf_threshold", 0.25))
+
+    # ── 模型加载 ──
+    try:
+        engine._ensure(model_key)
+    except FileNotFoundError as e:
+        raise HTTPException(503, f"模型权重文件未找到: {e}")
+    except Exception as e:
+        raise HTTPException(503, f"模型加载失败: {e}")
+
+    # ── 图片解码 ──
+    try:
+        img_bytes = base64.b64decode(data["image"])
+    except Exception:
+        raise HTTPException(400, "base64 解码失败，请检查图片数据")
+
+    nparr = np.frombuffer(img_bytes, np.uint8)
+    img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if img is None:
+        raise HTTPException(400, "无法解码图片（可能不是有效的 JPEG/PNG 帧数据）")
+
+    # ── 推理 ──
+    try:
+        results = engine.model(img, conf=conf, verbose=False)
+    except Exception as e:
+        raise HTTPException(500, f"推理失败: {e}")
+
+    boxes = []
+    for r in results:
+        if r.boxes is None:
+            continue
+        for b in r.boxes:
+            xyxy = b.xyxy.cpu().numpy()[0]
+            cls_id = int(b.cls.cpu().numpy()[0])
+            boxes.append({
+                "x1": float(xyxy[0]), "y1": float(xyxy[1]),
+                "x2": float(xyxy[2]), "y2": float(xyxy[3]),
+                "class_id": cls_id,
+                "class_name": CLASS_NAMES.get(cls_id, f"cls_{cls_id}"),
+                "confidence": float(b.conf.cpu().numpy()[0]),
+            })
+    return {"boxes": boxes, "total_objects": len(boxes)}
+
+
+@app.post("/camera-save")
+async def camera_save(data: dict):
+    """摄像头会话结束后，将收集的帧列表合成为检测结果视频。"""
+    import base64
+    frames_base64 = data.get("frames", [])  # ["base64...", ...]
+    model_key = data.get("model_key", "yolo11m")
+    conf = float(data.get("conf_threshold", 0.25))
+    fps = int(data.get("fps", 10))
+
+    if not frames_base64 or len(frames_base64) < 1:
+        raise HTTPException(400, "至少需要 1 帧")
+
+    engine._ensure(model_key)
+    vid = uuid.uuid4().hex
+    vid_dir = os.path.join(OUTPUT_DIR, vid)
+    os.makedirs(vid_dir, exist_ok=True)
+    out_path = os.path.join(vid_dir, "annotated.mp4")
+    raw_out_path = os.path.join(vid_dir, "annotated_raw.mp4")
+
+    total_objects = 0
+    first_shape = None
+
+    try:
+        # 第一帧确定视频尺寸
+        img_bytes = base64.b64decode(frames_base64[0])
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        first_frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        if first_frame is None:
+            raise HTTPException(400, "第一帧无法解码")
+        h, w = first_frame.shape[:2]
+        first_shape = (w, h)
+    except Exception as e:
+        raise HTTPException(400, f"解码失败: {e}")
+
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    writer = cv2.VideoWriter(raw_out_path, fourcc, fps, first_shape)
+    if not writer.isOpened():
+        raise HTTPException(500, "failed to create camera annotated video writer")
+
+    t0 = time.time()
+    frame_count = 0
+    for b64_frame in frames_base64:
+        try:
+            frame_count += 1
+            img_bytes = base64.b64decode(b64_frame)
+            nparr = np.frombuffer(img_bytes, np.uint8)
+            frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if frame is None:
+                continue
+            if frame.shape[1] != first_shape[0] or frame.shape[0] != first_shape[1]:
+                frame = cv2.resize(frame, first_shape)
+
+            results = engine.model(frame, conf=conf, verbose=False)
+            annotated = results[0].plot()
+            writer.write(annotated)
+
+            for r in results:
+                if r.boxes is None:
+                    continue
+                total_objects += len(r.boxes)
+        except Exception:
+            continue
+
+    writer.release()
+    transcode_to_browser_mp4(raw_out_path, out_path)
+    dt = round(time.time() - t0, 3)
+
+    return {
+        "video_id": vid,
+        "total_frames": frame_count,
+        "total_objects": total_objects,
+        "detection_time": dt,
+        "fps_original": fps,
+        "output_video": out_path,
+        "model_name": MODEL_REGISTRY[model_key]["name"],
+    }
+
+
 @app.get("/download/{video_id}")
 async def download_video(video_id: str):
+    # 精确查找 video_id 对应的输出目录
+    vid_dir = os.path.join(OUTPUT_DIR, video_id)
+    fp = os.path.join(vid_dir, "annotated.mp4")
+    if os.path.exists(fp):
+        return FileResponse(fp, media_type="video/mp4",
+                            filename=f"detected_{video_id[:8]}.mp4")
+    # 兼容旧格式：扫一遍输出目录（旧数据迁移用）
     for d in os.listdir(OUTPUT_DIR):
         fp = os.path.join(OUTPUT_DIR, d, "annotated.mp4")
         if os.path.exists(fp):

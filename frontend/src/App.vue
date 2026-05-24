@@ -14,6 +14,7 @@ import Sidebar from "./components/Sidebar.vue";
 import Header from "./components/Header.vue";
 import LoginModal from "./components/LoginModal.vue";
 import { setLoginModalTrigger, notifyLoggedIn } from "./utils/request";
+import { refreshAuth } from "./utils/auth";
 
 const showModal = ref(false);
 
@@ -24,6 +25,7 @@ onMounted(() => {
 const onLoggedIn = () => {
   showModal.value = false;
   notifyLoggedIn();
+  refreshAuth();
 };
 </script>
 

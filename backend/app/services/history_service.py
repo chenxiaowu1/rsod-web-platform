@@ -10,7 +10,7 @@ from app.models.db_models import DetectionRecord, ChangeDetectionRecord, VideoRe
 
 def save_record(detection_result, image_url: str, result_image_url: str,
                 filename: str, model_name: str, username: str = "",
-                user_id: int = 0) -> dict:
+                user_id: int = 0, preview_image_url: str = "") -> dict:
     """保存一条检测记录到 PostgreSQL"""
     db = SessionLocal()
     try:
@@ -25,6 +25,7 @@ def save_record(detection_result, image_url: str, result_image_url: str,
             filename=filename,
             image_url=image_url,
             result_image_url=result_image_url,
+            preview_image_url=preview_image_url,
             record_type="single",
             status="completed",
             total_objects=detection_result.total_objects,
@@ -43,12 +44,14 @@ def save_record(detection_result, image_url: str, result_image_url: str,
 
 def list_records(page: int = 1, page_size: int = 10,
                  keyword: str = "", status: str = "",
-                 username: str = "") -> tuple[list[dict], int]:
+                 username: str = "", user_id: int = 0) -> tuple[list[dict], int]:
     """分页查询记录"""
     db = SessionLocal()
     try:
         q = db.query(DetectionRecord)
-        if username:
+        if user_id:
+            q = q.filter(DetectionRecord.user_id == user_id)
+        elif username:
             q = q.filter(DetectionRecord.username == username)
         if keyword:
             q = q.filter(DetectionRecord.filename.ilike(f"%{keyword}%"))
@@ -77,12 +80,14 @@ def get_record(record_id: str) -> Optional[dict]:
         db.close()
 
 
-def get_all_records(username: str = "") -> list[dict]:
+def get_all_records(username: str = "", user_id: int = 0) -> list[dict]:
     """获取全部记录 (不分页), 用于统计"""
     db = SessionLocal()
     try:
         q = db.query(DetectionRecord)
-        if username:
+        if user_id:
+            q = q.filter(DetectionRecord.user_id == user_id)
+        elif username:
             q = q.filter(DetectionRecord.username == username)
         records = q.order_by(desc(DetectionRecord.created_at)).all()
         return [r.to_dict() for r in records]
@@ -137,11 +142,13 @@ def save_cd_record(detection_id: str, user_id: int, username: str,
 
 
 def list_cd_records(page: int = 1, page_size: int = 10,
-                    username: str = "") -> tuple[list[dict], int]:
+                    username: str = "", user_id: int = 0) -> tuple[list[dict], int]:
     db = SessionLocal()
     try:
         q = db.query(ChangeDetectionRecord)
-        if username:
+        if user_id:
+            q = q.filter(ChangeDetectionRecord.user_id == user_id)
+        elif username:
             q = q.filter(ChangeDetectionRecord.username == username)
         total = q.count()
         records = (
@@ -179,11 +186,13 @@ def delete_cd_record(record_id: str) -> bool:
         db.close()
 
 
-def get_all_cd_records(username: str = "") -> list[dict]:
+def get_all_cd_records(username: str = "", user_id: int = 0) -> list[dict]:
     db = SessionLocal()
     try:
         q = db.query(ChangeDetectionRecord)
-        if username:
+        if user_id:
+            q = q.filter(ChangeDetectionRecord.user_id == user_id)
+        elif username:
             q = q.filter(ChangeDetectionRecord.username == username)
         return [r.to_dict() for r in q.order_by(desc(ChangeDetectionRecord.created_at)).all()]
     finally:
@@ -195,14 +204,17 @@ def get_all_cd_records(username: str = "") -> list[dict]:
 def save_video_record(video_id: str, user_id: int, username: str,
                       filename: str, total_frames: int, total_objects: int,
                       detection_time: float, fps_original: float,
-                      model_name: str) -> dict:
+                      model_name: str, source_type: str = "video",
+                      result_url: str = "") -> dict:
     db = SessionLocal()
     try:
         record = VideoRecord(
             id=video_id, user_id=user_id, username=username,
-            filename=filename, total_frames=total_frames,
+            filename=filename, source_type=source_type,
+            total_frames=total_frames,
             total_objects=total_objects, detection_time=detection_time,
             fps_original=fps_original, model_name=model_name,
+            result_url=result_url,
         )
         db.add(record)
         db.commit()
@@ -213,11 +225,13 @@ def save_video_record(video_id: str, user_id: int, username: str,
 
 
 def list_video_records(page: int = 1, page_size: int = 10,
-                       username: str = "") -> tuple[list[dict], int]:
+                       username: str = "", user_id: int = 0) -> tuple[list[dict], int]:
     db = SessionLocal()
     try:
         q = db.query(VideoRecord)
-        if username:
+        if user_id:
+            q = q.filter(VideoRecord.user_id == user_id)
+        elif username:
             q = q.filter(VideoRecord.username == username)
         total = q.count()
         records = q.order_by(desc(VideoRecord.created_at)).offset(
@@ -236,11 +250,13 @@ def get_video_record(record_id: str):
         db.close()
 
 
-def get_all_video_records(username: str = "") -> list[dict]:
+def get_all_video_records(username: str = "", user_id: int = 0) -> list[dict]:
     db = SessionLocal()
     try:
         q = db.query(VideoRecord)
-        if username:
+        if user_id:
+            q = q.filter(VideoRecord.user_id == user_id)
+        elif username:
             q = q.filter(VideoRecord.username == username)
         return [r.to_dict() for r in q.order_by(desc(VideoRecord.created_at)).all()]
     finally:

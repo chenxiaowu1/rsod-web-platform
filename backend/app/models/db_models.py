@@ -24,6 +24,7 @@ class DetectionRecord(Base):
     filename = Column(String(500), nullable=False)
     image_url = Column(String(500), default="")
     result_image_url = Column(String(500), default="")
+    preview_image_url = Column(String(500), default="")
     record_type = Column(String(20), default="single")
     status = Column(String(20), default="completed")
     total_objects = Column(Integer, default=0)
@@ -41,6 +42,7 @@ class DetectionRecord(Base):
             "filename": self.filename,
             "image_url": self.image_url,
             "result_image_url": self.result_image_url,
+            "preview_image_url": self.preview_image_url,
             "type": self.record_type,
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -95,11 +97,13 @@ class VideoRecord(Base):
     user_id = Column(Integer, nullable=False, index=True)
     username = Column(String(50), nullable=False)
     filename = Column(String(500), default="")
+    source_type = Column(String(20), default="video")  # 'video' | 'camera'
     total_frames = Column(Integer, default=0)
     total_objects = Column(Integer, default=0)
     detection_time = Column(Float, default=0.0)
     fps_original = Column(Float, default=0.0)
     model_name = Column(String(100), default="")
+    result_url = Column(String(500), default="")
     status = Column(String(20), default="completed")
     created_at = Column(DateTime, server_default=func.now())
 
@@ -108,11 +112,13 @@ class VideoRecord(Base):
             "id": self.id,
             "username": self.username,
             "filename": self.filename,
+            "source_type": self.source_type,
             "total_frames": self.total_frames,
             "total_objects": self.total_objects,
             "detection_time": self.detection_time,
             "fps_original": self.fps_original,
             "model_name": self.model_name,
+            "result_url": self.result_url,
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }

@@ -46,21 +46,23 @@
 <script setup>
 import { computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { Picture, Clock, TrendCharts, ChatDotRound, DataLine, User, Connection, VideoCamera } from "@element-plus/icons-vue";
 
 const router = useRouter();
 const route = useRoute();
+const { t } = useI18n();
 
-const menuList = [
-  { name: "智能检测", desc: "遥感目标检测", icon: Picture, path: "/detection" },
-  { name: "变化检测", desc: "双时相对比", icon: Connection, path: "/change-detection" },
-  { name: "视频流检测", desc: "逐帧推理", icon: VideoCamera, path: "/video" },
-  { name: "历史记录", desc: "记录管理", icon: Clock, path: "/history" },
-  { name: "检测统计", desc: "聚合分析", icon: TrendCharts, path: "/statistics" },
-  { name: "目标库", desc: "类别字典", icon: DataLine, path: "/targets" },
-  { name: "AI 问答", desc: "智能助手", icon: ChatDotRound, path: "/qa" },
-  { name: "个人中心", desc: "账户信息", icon: User, path: "/profile" },
-];
+const menuList = computed(() => [
+  { name: t("nav.detection"), desc: t("detection.subtitle"), icon: Picture, path: "/detection" },
+  { name: t("nav.changeDetection"), desc: t("changeDetection.subtitle"), icon: Connection, path: "/change-detection" },
+  { name: t("nav.video"), desc: t("video.subtitle"), icon: VideoCamera, path: "/video" },
+  { name: t("nav.qa"), desc: t("qa.subtitle"), icon: ChatDotRound, path: "/qa" },
+  { name: t("nav.history"), desc: t("history.subtitle"), icon: Clock, path: "/history" },
+  { name: t("nav.statistics"), desc: t("statistics.subtitle"), icon: TrendCharts, path: "/statistics" },
+  { name: t("nav.targets"), desc: t("targets.subtitle"), icon: DataLine, path: "/targets" },
+  { name: t("nav.profile"), desc: t("profile.subtitle"), icon: User, path: "/profile" },
+]);
 
 const currentPath = computed(() => route.path);
 const handleMenuClick = (item) => router.push(item.path);

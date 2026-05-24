@@ -8,6 +8,18 @@
     </div>
 
     <div class="header-right">
+      <el-dropdown @command="switchLang" trigger="click">
+        <el-button class="theme-btn" size="small" circle>
+          <span style="font-size:12px;font-weight:700">{{ locale === 'zh-CN' ? '中' : 'EN' }}</span>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="zh-CN">中文</el-dropdown-item>
+            <el-dropdown-item command="en">English</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+
       <el-tooltip :content="isDark ? '切换浅色' : '切换深色'" placement="bottom">
         <el-button class="theme-btn" size="small" circle @click="toggleTheme">
           <el-icon :size="16"><Sunny v-if="isDark" /><Moon v-else /></el-icon>
@@ -36,9 +48,17 @@
 <script setup>
 import { computed, ref, onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
+import { useI18n } from "vue-i18n";
 import { ElMessageBox } from "element-plus";
 import { User, Sunny, Moon, SwitchButton } from "@element-plus/icons-vue";
-import { getSession, logoutUser } from "../utils/auth";
+import { getSession, clearAuthState, checkAuth, authVersion } from "../utils/auth";
+
+const { locale, t } = useI18n();
+
+const switchLang = (lang) => {
+  locale.value = lang;
+  localStorage.setItem("rsod-locale", lang);
+};
 
 const emit = defineEmits(["openLogin"]);
 
@@ -47,23 +67,29 @@ const router = useRouter();
 const isDark = ref(true);
 const THEME_KEY = "rsod-theme";
 
-const loggedIn = computed(() => !!getSession());
+const loggedIn = computed(() => {
+  authVersion.value;
+  return !!getSession();
+});
 const displayName = computed(() => {
+  authVersion.value;
   const s = getSession();
   return s ? s.username : "未登录";
 });
 
-const pageNames = {
-  "/detection": "智能检测",
-  "/change-detection": "变化检测",
-  "/video": "视频流检测",
-  "/history": "历史记录",
-  "/statistics": "检测统计",
-  "/qa": "AI 问答",
-  "/targets": "目标库",
-  "/profile": "个人中心",
-};
-const currentPageName = computed(() => pageNames[route.path] || "智能检测");
+const currentPageName = computed(() => {
+  const map = {
+    "/detection": t("nav.detection"),
+    "/change-detection": t("nav.changeDetection"),
+    "/video": t("nav.video"),
+    "/history": t("nav.history"),
+    "/statistics": t("nav.statistics"),
+    "/qa": t("nav.qa"),
+    "/targets": t("nav.targets"),
+    "/profile": t("nav.profile"),
+  };
+  return map[route.path] || t("nav.detection");
+});
 
 const applyTheme = (dark) => {
   document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
@@ -85,14 +111,16 @@ const handleLogout = async () => {
     await ElMessageBox.confirm("确定要退出登录吗？", "退出登录", {
       confirmButtonText: "退出", cancelButtonText: "取消", type: "warning",
     });
-    logoutUser();
+    clearAuthState();
     router.push("/detection");
   } catch (e) { /* cancelled */ }
 };
 
-onMounted(() => {
+onMounted(async () => {
   const saved = localStorage.getItem(THEME_KEY);
   applyTheme(saved !== "light");
+  // 启动时校验登录态，token 失效则自动清除并同步 UI
+  await checkAuth();
 });
 </script>
 

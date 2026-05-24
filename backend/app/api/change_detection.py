@@ -1,8 +1,13 @@
-import os, io, time, uuid, httpx
+import time, uuid, httpx, logging, base64
 from datetime import datetime
+from pathlib import Path
 from app.utils.file_utils import get_file_url, save_upload_file
+from app.utils.paths import Paths
+from app.utils.validation import CheckContext, DataValidator
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from fastapi.responses import StreamingResponse
 from app.services.history_service import save_cd_record, list_cd_records, get_cd_record, delete_cd_record, get_all_cd_records
+from app.services.minio_service import minio_service
 from app.utils.dependencies import get_current_user
 from app.models.db_models import User
 from app.models.schemas import (
@@ -13,14 +18,9 @@ from app.models.schemas import (
 )
 from app.config import settings
 
+logger = logging.getLogger("rsod.change_detection")
 router = APIRouter(prefix="/change-detection", tags=["change-detection"])
 CD_ENGINE = settings.CD_ENGINE_URL
-ALLOWED = {'.jpg', '.jpeg', '.png', '.bmp', '.tif', '.tiff'}
-
-
-def _valid_ext(name):
-    if os.path.splitext(name)[1].lower() not in ALLOWED:
-        raise HTTPException(400, f"不支持的文件格式: {name}")
 
 
 # ── 模型管理（代理到引擎）─────────────────────────
@@ -48,13 +48,18 @@ async def detect_change_single(
     model_key: str = Form(settings.DEFAULT_CD_MODEL),
     current_user: User = Depends(get_current_user),
 ):
-    _valid_ext(file_a.filename)
-    _valid_ext(file_b.filename)
+    ctx = CheckContext(file_path=Path(file_a.filename))
+    validator = DataValidator(ctx)
+    if not validator.validate_and_report(["file_extension"]):
+        raise HTTPException(400, "文件格式不支持")
 
-    filename_a = await save_upload_file(file_a, settings.UPLOAD_DIR)
-    filename_b = await save_upload_file(file_b, settings.UPLOAD_DIR)
-    path_a = os.path.join(settings.UPLOAD_DIR, filename_a)
-    path_b = os.path.join(settings.UPLOAD_DIR, filename_b)
+    logger.info("开始变化检测: %s / %s, 模型: %s", file_a.filename, file_b.filename, model_key)
+
+    upload_dir = str(Paths.uploads())
+    filename_a = await save_upload_file(file_a, upload_dir)
+    filename_b = await save_upload_file(file_b, upload_dir)
+    path_a = Paths.uploads() / filename_a
+    path_b = Paths.uploads() / filename_b
 
     with open(path_a, "rb") as f:
         content_a = f.read()
@@ -67,20 +72,31 @@ async def detect_change_single(
     async with httpx.AsyncClient(timeout=120) as c:
         r = await c.post(f"{CD_ENGINE}/detect/single", files=[fd_a, fd_b], data=data)
     if r.status_code != 200:
-        raise HTTPException(r.status_code, detail=f"变化检测引擎错误: {r.text}")
+        logger.error("变化检测引擎返回 %d: %s", r.status_code, r.text[:200])
+        raise HTTPException(502, "变化检测服务暂时不可用，请稍后重试")
     raw = r.json()
 
     img_a_url = get_file_url(filename_a, "static/uploads")
     img_b_url = get_file_url(filename_b, "static/uploads")
-    # 引擎只返回 change_ratio，结果图在主服务端后续渲染
-    # 这里用一个 placeholder result_url
-    result_url = img_a_url  # TODO: 等引擎返回 mask 后改为真实结果图
 
-    detection_id = f"cd_{os.path.basename(filename_a)[:8]}"
+    detection_id = f"cd_{Path(filename_a).stem[:8]}"
+
+    # 处理变化检测结果图
+    result_url = ""
+    if raw.get("vis_image"):
+        vis_bytes = base64.b64decode(raw["vis_image"])
+        result_filename = f"cd_{detection_id[:8]}.jpg"
+        result_path = Paths.results() / result_filename
+        result_path.write_bytes(vis_bytes)
+        minio_service.upload_file(str(result_path), f"results/{result_filename}", "image/jpeg")
+        result_url = get_file_url(result_filename, "static/results")
+    if not result_url:
+        result_url = img_a_url  # fallback: 引擎未返回结果图
     save_cd_record(detection_id, current_user.id, current_user.username,
                    filename_a, filename_b, img_a_url, img_b_url, result_url,
                    raw["change_ratio"], raw["detection_time"], raw["model_name"])
 
+    logger.info("变化检测完成: 变化比例 %.4f, 耗时 %.2fs", raw["change_ratio"], raw["detection_time"])
     return ChangeDetectionResponse(
         success=True, message="检测完成",
         data=ChangeDetectionResult(
@@ -148,7 +164,7 @@ async def detect_change_batch(
 @router.get("/history", response_model=ChangeHistoryListResponse)
 async def get_cd_history(page: int = 1, page_size: int = 10,
                          current_user: User = Depends(get_current_user)):
-    records, total = list_cd_records(page, page_size, current_user.username)
+    records, total = list_cd_records(page, page_size, user_id=current_user.id)
     return ChangeHistoryListResponse(
         success=True, message="获取成功",
         data=[ChangeHistoryRecord(**r) for r in records],
@@ -180,9 +196,35 @@ async def delete_cd_history_record(record_id: str):
     return {"success": True, "message": "删除成功"}
 
 
+# ── 批量下载结果图 (ZIP) ──────────────────────────
+
+@router.post("/download-results")
+async def download_results(data: dict):
+    import zipfile, io
+    from urllib.parse import urlparse
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for rid in data.get("record_ids", []):
+            rec = get_cd_record(rid)
+            if not rec:
+                continue
+            parsed = urlparse(rec.get("result_url", ""))
+            rp = Paths.results() / Path(parsed.path).name
+            if rp.exists():
+                name_a = Path(rec.get("filename_a", "a")).stem
+                name_b = Path(rec.get("filename_b", "b")).stem
+                zf.write(str(rp), f"cd_{name_a}_{name_b}_{rid[:8]}.jpg")
+    buf.seek(0)
+    return StreamingResponse(
+        buf, media_type="application/zip",
+        headers={"Content-Disposition": f"attachment; filename=cd_results_{len(data.get('record_ids', []))}.zip"},
+    )
+
+
 @router.get("/statistics")
 async def get_cd_statistics(current_user: User = Depends(get_current_user)):
-    records = get_all_cd_records(username=current_user.username)
+    records = get_all_cd_records(user_id=current_user.id)
     if not records:
         return {"success": True, "message": "暂无数据", "data": None}
 

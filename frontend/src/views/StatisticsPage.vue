@@ -2,10 +2,10 @@
   <div class="stats-page">
     <div class="page-header">
       <div class="header-left">
-        <h1 class="page-title">检测统计</h1>
-        <p class="page-subtitle">基于检测历史数据的聚合统计与分析</p>
+        <h1 class="page-title">{{ $t('nav.statistics') }}</h1>
+        <p class="page-subtitle">{{ $t('statistics.subtitle') }}</p>
       </div>
-      <el-button @click="fetchData" :loading="loading">刷新数据</el-button>
+      <el-button @click="fetchData" :loading="loading">{{ $t('statistics.refresh') }}</el-button>
     </div>
 
     <div class="stats-tabs">
@@ -16,21 +16,21 @@
       </div>
     </div>
 
-    <div v-if="loading" class="loading-state"><span class="loader"></span><span>加载中...</span></div>
+    <div v-if="loading" class="loading-state"><span class="loader"></span><span>{{ $t('statistics.loading') }}</span></div>
 
-    <!-- 智能检测统计 -->
+    <!-- {{ $t('nav.detection') }}统计 -->
     <template v-else-if="activeTab === 'detection' && stats">
       <div class="overview-cards">
-        <div class="ov-card"><span class="ov-value">{{ stats.total_images }}</span><span class="ov-label">检测图像数</span></div>
-        <div class="ov-card"><span class="ov-value">{{ stats.total_objects }}</span><span class="ov-label">检出目标总数</span></div>
-        <div class="ov-card"><span class="ov-value">{{ stats.avg_objects_per_image }}</span><span class="ov-label">平均目标数 / 图</span></div>
-        <div class="ov-card"><span class="ov-value">{{ stats.avg_detection_time }}s</span><span class="ov-label">平均检测耗时</span></div>
+        <div class="ov-card"><span class="ov-value">{{ stats.total_images }}</span><span class="ov-label">{{ $t('statistics.detectionImages') }}</span></div>
+        <div class="ov-card"><span class="ov-value">{{ stats.total_objects }}</span><span class="ov-label">{{ $t('statistics.totalObjectsDetected') }}</span></div>
+        <div class="ov-card"><span class="ov-value">{{ stats.avg_objects_per_image }}</span><span class="ov-label">{{ $t('statistics.avgObjectsPerImage') }}</span></div>
+        <div class="ov-card"><span class="ov-value">{{ stats.avg_detection_time }}s</span><span class="ov-label">{{ $t('statistics.avgDetectionTime') }}</span></div>
       </div>
 
       <div class="section-card" v-if="stats.daily_trend?.length">
-        <div class="section-header"><h3>每日检测趋势</h3></div>
+        <div class="section-header"><h3>{{ $t('statistics.dailyDetectionTrend') }}</h3></div>
         <div class="trend-chart"><div class="trend-bars">
-          <div v-for="day in stats.daily_trend" :key="day.date" class="trend-bar-col" :title="`${day.date}: ${day.count}次, ${day.objects}个`">
+          <div v-for="day in stats.daily_trend" :key="day.date" class="trend-bar-col" :title="`${day.date}: ${day.count}${$t('statistics.times')}, ${day.objects}${$t('statistics.videos')}`">
             <div class="trend-bar-wrap"><div class="trend-bar" :style="{ height: barH(day.objects, maxDaily) + '%' }"></div></div>
             <span class="trend-date">{{ day.date.slice(5) }}</span><span class="trend-val">{{ day.objects }}</span>
           </div>
@@ -39,14 +39,14 @@
 
       <div class="two-col">
         <div class="section-card" v-if="stats.model_distribution?.length">
-          <div class="section-header"><h3>模型使用分布</h3></div>
+          <div class="section-header"><h3>{{ $t('statistics.modelDistribution') }}</h3></div>
           <div v-for="m in stats.model_distribution" :key="m.model" class="bar-row">
-            <span class="bar-label">{{ m.model }}</span><span class="bar-num">{{ m.count }} 次</span>
+            <span class="bar-label">{{ m.model }}</span><span class="bar-num">{{ m.count }}{{ $t('statistics.times') }}</span>
             <div class="bar-track"><div class="bar-fill" :style="{ width: barW(m.count, maxModel) + '%' }"></div></div>
           </div>
         </div>
         <div class="section-card" v-if="stats.confidence_distribution?.length">
-          <div class="section-header"><h3>置信度分布</h3></div>
+          <div class="section-header"><h3>{{ $t('statistics.confidenceDistribution') }}</h3></div>
           <div v-for="bin in stats.confidence_distribution" :key="bin.range" class="bar-row">
             <span class="bar-label">{{ bin.range }}</span><span class="bar-num">{{ bin.count }}</span>
             <div class="bar-track"><div class="bar-fill" :style="{ width: barW(bin.count, maxConf) + '%' }"></div></div>
@@ -55,7 +55,7 @@
       </div>
 
       <div class="section-card" v-if="stats.per_class?.length">
-        <div class="section-header"><h3>各类别检测统计</h3></div>
+        <div class="section-header"><h3>{{ $t('statistics.perClassStats') }}</h3></div>
         <div v-for="cls in stats.per_class" :key="cls.class_name" class="bar-row">
           <span class="bar-label">{{ cls.chinese_name }} <em>{{ cls.class_name }}</em></span>
           <span class="bar-num">{{ cls.count }}</span>
@@ -64,27 +64,27 @@
       </div>
     </template>
 
-    <!-- 变化检测统计 -->
+    <!-- {{ $t('nav.changeDetection') }}统计 -->
     <template v-else-if="activeTab === 'change' && stats">
       <div class="overview-cards">
-        <div class="ov-card"><span class="ov-value">{{ stats.total_pairs }}</span><span class="ov-label">检测对数</span></div>
-        <div class="ov-card"><span class="ov-value">{{ (stats.avg_change_ratio * 100).toFixed(2) }}%</span><span class="ov-label">平均变化比例</span></div>
-        <div class="ov-card"><span class="ov-value">{{ stats.avg_time }}s</span><span class="ov-label">平均耗时 / 对</span></div>
-        <div class="ov-card"><span class="ov-value">{{ stats.total_time }}s</span><span class="ov-label">总耗时</span></div>
+        <div class="ov-card"><span class="ov-value">{{ stats.total_pairs }}</span><span class="ov-label">{{ $t('statistics.detectionPairs') }}</span></div>
+        <div class="ov-card"><span class="ov-value">{{ (stats.avg_change_ratio * 100).toFixed(2) }}%</span><span class="ov-label">{{ $t('statistics.avgChangeRatio') }}</span></div>
+        <div class="ov-card"><span class="ov-value">{{ stats.avg_time }}s</span><span class="ov-label">{{ $t('statistics.avgTimePerPair') }}</span></div>
+        <div class="ov-card"><span class="ov-value">{{ stats.total_time }}s</span><span class="ov-label">{{ $t('statistics.totalTime') }}</span></div>
       </div>
 
       <div class="two-col">
         <div class="section-card" v-if="stats.daily_trend?.length">
-          <div class="section-header"><h3>每日检测趋势</h3></div>
+          <div class="section-header"><h3>{{ $t('statistics.dailyChangeTrend') }}</h3></div>
           <div v-for="d in stats.daily_trend" :key="d.date" class="bar-row">
-            <span class="bar-label">{{ d.date }}</span><span class="bar-num">{{ d.count }} 对</span>
+            <span class="bar-label">{{ d.date }}</span><span class="bar-num">{{ d.count }}{{ $t('statistics.pairs') }}</span>
             <div class="bar-track"><div class="bar-fill" :style="{ width: barW(d.count, maxDaily2) + '%' }"></div></div>
           </div>
         </div>
         <div class="section-card" v-if="stats.model_usage?.length">
-          <div class="section-header"><h3>模型使用分布</h3></div>
+          <div class="section-header"><h3>{{ $t('statistics.modelDistribution') }}</h3></div>
           <div v-for="m in stats.model_usage" :key="m.model" class="bar-row">
-            <span class="bar-label">{{ m.model }}</span><span class="bar-num">{{ m.count }} 次</span>
+            <span class="bar-label">{{ m.model }}</span><span class="bar-num">{{ m.count }}{{ $t('statistics.times') }}</span>
             <div class="bar-track"><div class="bar-fill" :style="{ width: barW(m.count, maxModel2) + '%' }"></div></div>
           </div>
         </div>
@@ -94,24 +94,24 @@
     <!-- 视频统计 -->
     <template v-else-if="activeTab === 'video' && stats">
       <div class="overview-cards">
-        <div class="ov-card"><span class="ov-value">{{ stats.total_videos }}</span><span class="ov-label">处理视频数</span></div>
-        <div class="ov-card"><span class="ov-value">{{ stats.total_frames }}</span><span class="ov-label">总帧数</span></div>
-        <div class="ov-card"><span class="ov-value">{{ stats.total_objects }}</span><span class="ov-label">检出目标总数</span></div>
-        <div class="ov-card"><span class="ov-value">{{ stats.avg_time }}s</span><span class="ov-label">平均耗时 / 视频</span></div>
+        <div class="ov-card"><span class="ov-value">{{ stats.total_videos }}</span><span class="ov-label">{{ $t('statistics.totalVideos') }}</span></div>
+        <div class="ov-card"><span class="ov-value">{{ stats.total_frames }}</span><span class="ov-label">{{ $t('statistics.totalFrames') }}</span></div>
+        <div class="ov-card"><span class="ov-value">{{ stats.total_objects }}</span><span class="ov-label">{{ $t('statistics.totalObjectsDetected') }}</span></div>
+        <div class="ov-card"><span class="ov-value">{{ stats.avg_time }}s</span><span class="ov-label">{{ $t('statistics.avgTimePerVideo') }}</span></div>
       </div>
 
       <div class="two-col">
         <div class="section-card" v-if="stats.daily_trend?.length">
-          <div class="section-header"><h3>每日处理量</h3></div>
+          <div class="section-header"><h3>{{ $t('statistics.dailyProcessing') }}</h3></div>
           <div v-for="d in stats.daily_trend" :key="d.date" class="bar-row">
-            <span class="bar-label">{{ d.date }}</span><span class="bar-num">{{ d.count }} 个</span>
+            <span class="bar-label">{{ d.date }}</span><span class="bar-num">{{ d.count }}{{ $t('statistics.videos') }}</span>
             <div class="bar-track"><div class="bar-fill" :style="{ width: barW(d.count, maxDaily3) + '%' }"></div></div>
           </div>
         </div>
         <div class="section-card" v-if="stats.model_usage?.length">
-          <div class="section-header"><h3>模型使用分布</h3></div>
+          <div class="section-header"><h3>{{ $t('statistics.modelDistribution') }}</h3></div>
           <div v-for="m in stats.model_usage" :key="m.model" class="bar-row">
-            <span class="bar-label">{{ m.model }}</span><span class="bar-num">{{ m.count }} 次</span>
+            <span class="bar-label">{{ m.model }}</span><span class="bar-num">{{ m.count }}{{ $t('statistics.times') }}</span>
             <div class="bar-track"><div class="bar-fill" :style="{ width: barW(m.count, maxModel3) + '%' }"></div></div>
           </div>
         </div>
@@ -120,24 +120,28 @@
 
     <div v-else class="empty-state">
       <el-icon :size="48"><DataLine /></el-icon>
-      <p class="empty-text">暂无数据</p>
-      <el-button type="primary" @click="$router.push('/detection')">开始检测</el-button>
+      <p class="empty-text">{{ $t('statistics.noData') }}</p>
+      <el-button type="primary" @click="$router.push('/detection')">{{ $t('statistics.startDetection') }}</el-button>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from "vue";
+import { useI18n } from "vue-i18n";
 import { ElMessage } from "element-plus";
 import { DataLine, Aim, Connection, VideoCamera } from "@element-plus/icons-vue";
 import { getStatistics } from "../api/detection";
 import request from "../utils/request";
+import { requireLogin } from "../utils/request";
 
-const tabs = [
-  { key: "detection", label: "智能检测", icon: Aim },
-  { key: "change", label: "变化检测", icon: Connection },
-  { key: "video", label: "视频流检测", icon: VideoCamera },
-];
+const { t } = useI18n();
+
+const tabs = computed(() => [
+  { key: "detection", label: t("nav.detection"), icon: Aim },
+  { key: "change", label: t("nav.changeDetection"), icon: Connection },
+  { key: "video", label: t("nav.video"), icon: VideoCamera },
+]);
 
 const activeTab = ref("detection");
 const loading = ref(false);
@@ -154,7 +158,7 @@ const fetchData = async () => {
   try {
     const res = await apiMap[activeTab.value]();
     stats.value = res.data;
-  } catch (e) { ElMessage.error("获取失败"); }
+  } catch (e) { ElMessage.error(t("statistics.fetchError")); }
   finally { loading.value = false; }
 };
 
@@ -170,7 +174,10 @@ const maxModel3 = computed(() => stats.value?.model_usage?.length ? Math.max(...
 const barH = (v, m) => m ? (v / m) * 100 : 0;
 const barW = (v, m) => m ? (v / m) * 100 : 0;
 
-onMounted(() => fetchData());
+onMounted(async () => {
+  if (!(await requireLogin())) return;
+  fetchData();
+});
 </script>
 
 <style scoped>

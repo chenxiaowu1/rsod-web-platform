@@ -36,25 +36,27 @@ env/
 *.bin
 *.safetensors
 
-# 数据集
-data/
-dataset/
-datasets/
-
 # 训练运行结果
 runs/
 
 # ==================================
 # 运行时生成的文件（不上传）
 # ==================================
-# 检测历史记录
-history/
+# Docker 数据卷
+storage/
+
+# 引擎运行时（上传 / 输出 / 临时文件）
+engines/*/uploads/
+engines/*/outputs/
+engines/*/temp/
+engines/*/results/
 
 # 用户上传 & 检测结果
 static/uploads/
 static/results/
 backend/static/uploads/
 backend/static/results/
+backend/static/cd_temp/
 
 # 日志
 *.log
@@ -78,16 +80,6 @@ dist-ssr/
 *.swp
 *.swo
 .sublime-*
-
-# ==================================
-# 引擎运行时（上传/输出/临时文件）
-# ==================================
-engines/*/uploads/
-engines/*/outputs/
-engines/*/temp/
-
-# 变化检测临时输出
-backend/static/cd_temp/
 
 # ==================================
 # 系统 & 杂项

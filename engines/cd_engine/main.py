@@ -84,14 +84,28 @@ class ChangeDetectionEngine:
         mask_path = os.path.join(pred_dir, mask_files[0]) if mask_files else None
 
         change_ratio = 0.0
+        vis_path = None
         if mask_path and os.path.exists(mask_path):
             mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
             if mask is not None:
                 change_ratio = float((mask > 0).sum() / mask.size)
 
+                # 生成变化区域可视化：在时相2原图上叠加红色蒙层
+                img_b = cv2.imread(img_b_path)
+                if img_b is not None:
+                    if img_b.shape[:2] != mask.shape[:2]:
+                        mask = cv2.resize(mask, (img_b.shape[1], img_b.shape[0]))
+                    overlay = img_b.copy()
+                    overlay[mask > 0] = [0, 0, 255]  # 红色标记变化区域
+                    blended = cv2.addWeighted(img_b, 0.5, overlay, 0.5, 0)
+                    vis_dir = os.path.join(out_dir, "vis")
+                    os.makedirs(vis_dir, exist_ok=True)
+                    vis_path = os.path.join(vis_dir, "change_map.jpg")
+                    cv2.imwrite(vis_path, blended)
+
         dt = round(time.time() - t0, 3)
         return {"change_ratio": round(change_ratio, 4), "detection_time": dt,
-                "model_name": MODEL_REGISTRY[key]["name"]}
+                "model_name": MODEL_REGISTRY[key]["name"], "vis_path": vis_path}
 
 
 engine = ChangeDetectionEngine()
@@ -138,6 +152,14 @@ async def detect_single(
     os.makedirs(out_dir, exist_ok=True)
     try:
         result = engine.detect(model_key, path_a, path_b, out_dir)
+        # 如果有可视化图，读取后转 base64 返回
+        vis_data = None
+        if result.get("vis_path") and os.path.exists(result["vis_path"]):
+            with open(result["vis_path"], "rb") as vf:
+                import base64
+                vis_data = base64.b64encode(vf.read()).decode()
+        result["vis_image"] = vis_data
+        result.pop("vis_path", None)
         return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

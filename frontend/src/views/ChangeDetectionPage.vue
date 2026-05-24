@@ -2,12 +2,12 @@
   <div class="cd-page">
     <div class="page-header">
       <div class="header-left">
-        <h1 class="page-title">变化检测</h1>
-        <p class="page-subtitle">上传双时相遥感影像，识别变化区域</p>
+        <h1 class="page-title">{{ $t('nav.changeDetection') }}</h1>
+        <p class="page-subtitle">{{ $t('changeDetection.subtitle') }}</p>
       </div>
       <div class="header-right">
         <div class="model-config-box">
-          <span class="config-label">模型配置</span>
+          <span class="config-label">{{ $t('changeDetection.modelConfig') }}</span>
           <el-select v-model="selectedModel" class="model-select" @change="onModelChange">
             <el-option v-for="m in availableModels" :key="m.key" :label="m.display" :value="m.key">
               <div class="model-option">
@@ -39,44 +39,44 @@
 
     <!-- 上传区域 — 单图 -->
     <div class="upload-row" v-if="activeTab === 'single'">
-      <div class="upload-zone" @click="$refs.inputA.click()">
+      <div class="upload-zone" @click="handleUploadClick('a')">
         <input ref="inputA" type="file" accept="image/*,.tif,.tiff" class="hidden-input" @change.stop="(e) => handleFileSingle(e, 'A')" />
         <el-icon :size="28"><Picture /></el-icon>
-        <span class="upload-text">时相 1 (旧图)</span>
+        <span class="upload-text">{{ $t('changeDetection.phase1') }}</span>
         <span class="upload-hint">{{ fileAName || 'JPG / PNG / TIF' }}</span>
       </div>
-      <div class="upload-zone" @click="$refs.inputB.click()">
+      <div class="upload-zone" @click="handleUploadClick('b')">
         <input ref="inputB" type="file" accept="image/*,.tif,.tiff" class="hidden-input" @change.stop="(e) => handleFileSingle(e, 'B')" />
         <el-icon :size="28"><Picture /></el-icon>
-        <span class="upload-text">时相 2 (新图)</span>
+        <span class="upload-text">{{ $t('changeDetection.phase2') }}</span>
         <span class="upload-hint">{{ fileBName || 'JPG / PNG / TIF' }}</span>
       </div>
     </div>
 
     <!-- 上传区域 — 批量 -->
     <div class="upload-row" v-if="activeTab === 'batch'">
-      <div class="upload-zone" @click="$refs.folderA.click()">
+      <div class="upload-zone" @click="handleUploadClick('folderA')">
         <input ref="folderA" type="file" accept="image/*,.tif,.tiff" webkitdirectory class="hidden-input" @change.stop="(e) => handleFolder(e, 'A')" />
         <el-icon :size="28"><FolderOpened /></el-icon>
-        <span class="upload-text">时相 1 文件夹</span>
-        <span class="upload-hint">{{ folderACount ? folderACount + ' 张' : '选择整个文件夹' }}</span>
+        <span class="upload-text">{{ $t('changeDetection.phase1Folder') }}</span>
+        <span class="upload-hint">{{ folderACount ? folderACount + ' ' + $t('statistics.images') : $t('changeDetection.selectFolder') }}</span>
       </div>
-      <div class="upload-zone" @click="$refs.folderB.click()">
+      <div class="upload-zone" @click="handleUploadClick('folderB')">
         <input ref="folderB" type="file" accept="image/*,.tif,.tiff" webkitdirectory class="hidden-input" @change.stop="(e) => handleFolder(e, 'B')" />
         <el-icon :size="28"><FolderOpened /></el-icon>
-        <span class="upload-text">时相 2 文件夹</span>
-        <span class="upload-hint">{{ folderBCount ? folderBCount + ' 张' : '选择整个文件夹' }}</span>
+        <span class="upload-text">{{ $t('changeDetection.phase2Folder') }}</span>
+        <span class="upload-hint">{{ folderBCount ? folderBCount + ' ' + $t('statistics.images') : $t('changeDetection.selectFolder') }}</span>
       </div>
     </div>
 
     <!-- 下载栏 -->
     <div class="download-bar" v-if="(activeTab === 'single' && singleResultUrl) || (activeTab === 'batch' && batchDone > 0)">
-      <span class="download-bar-label">结果图下载</span>
+      <span class="download-bar-label">{{ $t('changeDetection.resultDownload') }}</span>
       <el-button v-if="activeTab === 'single' && singleResultUrl" size="small" type="primary" @click="downloadResult(singleResultUrl)">
-        <el-icon :size="14"><Download /></el-icon> 下载结果图
+        <el-icon :size="14"><Download /></el-icon> {{ $t('changeDetection.downloadResult') }}
       </el-button>
       <el-button v-if="activeTab === 'batch' && batchDone > 0" size="small" type="primary" @click="downloadBatchResults">
-        <el-icon :size="14"><Download /></el-icon> 下载全部结果图 ({{ batchDone }} 张 · ZIP)
+        <el-icon :size="14"><Download /></el-icon> {{ $t('changeDetection.downloadAllResults') }} ({{ batchDone }}{{ $t('statistics.images') }} · ZIP)
       </el-button>
     </div>
 
@@ -87,48 +87,48 @@
       <template v-if="activeTab === 'single'">
         <div class="left-panel">
           <div class="panel-topbar">
-            <span class="panel-label">变化检测</span>
+            <span class="panel-label">{{ $t('nav.changeDetection') }}</span>
             <div class="panel-status">
-              <span v-if="loading" class="status processing"><span class="status-dot"></span>检测中...</span>
-              <span v-else-if="singleResult" class="status done"><span class="status-dot"></span>检测完成</span>
-              <span v-else class="status idle"><span class="status-dot"></span>等待上传</span>
-              <el-button v-if="singleResult" size="small" @click="resetSingle" circle><el-icon :size="14"><Close /></el-icon></el-button>
+              <span v-if="loading" class="status processing"><span class="status-dot"></span>{{ $t('changeDetection.detecting') }}</span>
+              <span v-else-if="singleResult" class="status done"><span class="status-dot"></span>{{ $t('changeDetection.detectionDone') }}</span>
+              <span v-else class="status idle"><span class="status-dot"></span>{{ $t('changeDetection.waitingUpload') }}</span>
+              <el-button v-if="hasSingleState" size="small" @click="resetSingle" circle><el-icon :size="14"><Close /></el-icon></el-button>
             </div>
           </div>
 
           <!-- 三栏预览：时相1 + 时相2 + 变化结果 -->
-          <div class="image-compare-triple" v-if="singleResult || fileA || fileB">
+          <div class="image-compare-triple" v-if="hasSingleState">
             <div class="image-card">
               <img v-if="singleImgA" :src="singleImgA" class="compare-image" />
-              <div v-else class="placeholder"><el-icon :size="40"><Picture /></el-icon><span>时相 1</span></div>
-              <div class="image-label">时相 1</div>
+              <div v-else class="placeholder"><el-icon :size="40"><Picture /></el-icon><span>{{ $t('changeDetection.phase1') }}</span></div>
+              <div class="image-label">{{ $t('changeDetection.phase1') }}</div>
             </div>
             <div class="image-card">
               <img v-if="singleImgB" :src="singleImgB" class="compare-image" />
-              <div v-else class="placeholder"><el-icon :size="40"><Picture /></el-icon><span>时相 2</span></div>
-              <div class="image-label">时相 2</div>
+              <div v-else class="placeholder"><el-icon :size="40"><Picture /></el-icon><span>{{ $t('changeDetection.phase2') }}</span></div>
+              <div class="image-label">{{ $t('changeDetection.phase2') }}</div>
             </div>
             <div class="image-card">
               <img v-if="singleResultUrl" :src="singleResultUrl" class="compare-image" />
-              <div v-else class="placeholder"><el-icon :size="40"><Aim /></el-icon><span>变化结果</span></div>
-              <div class="image-label result-label">变化区域</div>
+              <div v-else class="placeholder"><el-icon :size="40"><Aim /></el-icon><span>{{ $t('changeDetection.changeResult') }}</span></div>
+              <div class="image-label result-label">{{ $t('changeDetection.changeAreaLabel') }}</div>
               <div v-if="singleResult" class="detection-badge">{{ (singleResult.change_ratio * 100).toFixed(1) }}%</div>
             </div>
           </div>
 
           <div v-else class="batch-empty">
             <el-icon :size="48"><Picture /></el-icon>
-            <p>上传两张不同时相的遥感影像进行变化检测</p>
+            <p>{{ $t('changeDetection.uploadTwoImages') }}</p>
           </div>
         </div>
 
         <div class="right-panel" v-if="singleResult">
           <div class="info-card">
-            <div class="info-row"><span class="info-label">检测模型</span><span class="info-value accent">{{ singleResult.model_name }}</span></div>
-            <div class="info-row"><span class="info-label">检测耗时</span><span class="info-value mono">{{ singleResult.detection_time }}s</span></div>
-            <div class="info-row"><span class="info-label">变化比例</span><span class="info-value mono">{{ (singleResult.change_ratio * 100).toFixed(2) }}%</span></div>
+            <div class="info-row"><span class="info-label">{{ $t('changeDetection.modelNameLabel') }}</span><span class="info-value accent">{{ singleResult.model_name }}</span></div>
+            <div class="info-row"><span class="info-label">{{ $t('changeDetection.detectionTimeLabel') }}</span><span class="info-value mono">{{ singleResult.detection_time }}s</span></div>
+            <div class="info-row"><span class="info-label">{{ $t('changeDetection.changeRatioLabel') }}</span><span class="info-value mono">{{ (singleResult.change_ratio * 100).toFixed(2) }}%</span></div>
           </div>
-          <el-button class="reset-btn" @click="resetSingle"><el-icon><Refresh /></el-icon>重新检测</el-button>
+          <el-button class="reset-btn" @click="runSingleDetection"><el-icon><Refresh /></el-icon>{{ $t('changeDetection.reDetect') }}</el-button>
         </div>
       </template>
 
@@ -136,11 +136,11 @@
       <template v-else>
         <div class="left-panel">
           <div class="panel-topbar">
-            <span class="panel-label">批量检测 <span class="panel-count">共 {{ batchPairs.length }} 对</span></span>
+            <span class="panel-label">{{ $t('changeDetection.batchDetection') }} <span class="panel-count">{{ batchPairs.length }}{{ $t('statistics.pairs') }}</span></span>
             <div class="panel-status">
-              <span v-if="batchLoading" class="status processing"><span class="status-dot"></span>检测中 {{ batchDone }}/{{ batchPairs.length }}...</span>
-              <span v-else-if="batchDone > 0" class="status done"><span class="status-dot"></span>全部完成 · {{ batchTotalTime }}s</span>
-              <span v-else class="status idle"><span class="status-dot"></span>等待上传</span>
+              <span v-if="batchLoading" class="status processing"><span class="status-dot"></span>{{ $t('changeDetection.detectingProgress') }} {{ batchDone }}/{{ batchPairs.length }}...</span>
+              <span v-else-if="batchDone > 0" class="status done"><span class="status-dot"></span>{{ $t('changeDetection.allDone') }} · {{ batchTotalTime }}s</span>
+              <span v-else class="status idle"><span class="status-dot"></span>{{ $t('changeDetection.waitingUpload') }}</span>
               <el-button v-if="batchPairs.length" size="small" @click="resetBatch" circle><el-icon :size="14"><Close /></el-icon></el-button>
             </div>
           </div>
@@ -166,7 +166,7 @@
 
           <div v-else class="batch-empty">
             <el-icon :size="48"><FolderOpened /></el-icon>
-            <p>上传两个文件夹，按文件名排序配对检测</p>
+            <p>{{ $t('changeDetection.uploadTwoFolders') }}</p>
           </div>
         </div>
       </template>
@@ -176,42 +176,66 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from "vue";
+import { ref, onMounted, watch, computed } from "vue";
+import { useI18n } from "vue-i18n";
 import { ElMessage } from "element-plus";
-import { detectChangeSingle, detectChangeBatch, getChangeModels, switchChangeModel } from "../api/detection";
+import { detectChangeSingle, detectChangeBatch, getChangeModels, switchChangeModel, previewImage, downloadChangeResultsZip } from "../api/detection";
 import { requireLogin } from "../utils/request";
+import { getSession, authVersion } from "../utils/auth";
+import { useChangeDetectionStore } from "../stores/changeDetectionStore";
 import { Picture, Aim, Close, FolderOpened, Refresh, Download } from "@element-plus/icons-vue";
 
-const selectedModel = ref("");
-const availableModels = ref([]);
-const activeTab = ref("single");
-const loading = ref(false);
+const { t } = useI18n();
+const store = useChangeDetectionStore();
 
-// ── 单图 ──
+// 退出登录后自动清空检测状态
+watch(authVersion, () => {
+  if (!getSession()) {
+    store.clearAll();
+  }
+});
+
+const availableModels = ref([]);
+const loading = ref(false);
+const batchLoading = ref(false);
+
+// ── 不可序列化的 File / DOM 引用（本地保留）──
 const fileA = ref(null);
 const fileB = ref(null);
-const fileAName = ref("");
-const fileBName = ref("");
-const singleImgA = ref("");
-const singleImgB = ref("");
-const singleResultUrl = ref("");
-const singleResult = ref(null);
-
-// ── 批量 ──
-const batchPairs = ref([]);
-const batchLoading = ref(false);
-const batchDone = ref(0);
-const batchCurrentIdx = ref(-1);
-const batchTotalTime = ref(0);
-const folderACount = ref(0);
-const folderBCount = ref(0);
 const filesAList = ref([]);
 const filesBList = ref([]);
+const inputA = ref(null);
+const inputB = ref(null);
+const folderA = ref(null);
+const folderB = ref(null);
 
-const functionTabs = [
-  { key: "single", name: "单图检测", desc: "对比两张遥感影像", icon: Picture },
-  { key: "batch", name: "批量检测", desc: "上传两个文件夹", icon: FolderOpened },
-];
+// 计算属性代理 store 以便模板使用
+const selectedModel = computed({ get: () => store.selectedModel, set: (v) => { store.selectedModel = v; } });
+const activeTab = computed({ get: () => store.activeTab, set: (v) => { store.activeTab = v; } });
+const fileAName = computed({ get: () => store.fileAName, set: (v) => { store.fileAName = v; } });
+const fileBName = computed({ get: () => store.fileBName, set: (v) => { store.fileBName = v; } });
+const singleImgA = computed({ get: () => store.singleImgA, set: (v) => { store.singleImgA = v; } });
+const singleImgB = computed({ get: () => store.singleImgB, set: (v) => { store.singleImgB = v; } });
+const singleResultUrl = computed({ get: () => store.singleResultUrl, set: (v) => { store.singleResultUrl = v; } });
+const singleResult = computed({ get: () => store.singleResult, set: (v) => { store.singleResult = v; } });
+const batchPairs = computed({ get: () => store.batchPairs, set: (v) => { store.batchPairs = v; } });
+const batchDone = computed({ get: () => store.batchDone, set: (v) => { store.batchDone = v; } });
+const batchCurrentIdx = computed({ get: () => store.batchCurrentIdx, set: (v) => { store.batchCurrentIdx = v; } });
+const batchTotalTime = computed({ get: () => store.batchTotalTime, set: (v) => { store.batchTotalTime = v; } });
+const folderACount = computed({ get: () => store.folderACount, set: (v) => { store.folderACount = v; } });
+const folderBCount = computed({ get: () => store.folderBCount, set: (v) => { store.folderBCount = v; } });
+const hasSingleState = computed(() => !!(
+  singleResult.value ||
+  singleImgA.value ||
+  singleImgB.value ||
+  fileAName.value ||
+  fileBName.value
+));
+
+const functionTabs = computed(() => [
+  { key: "single", name: t("changeDetection.singleMode"), desc: t("changeDetection.singleModeDesc"), icon: Picture },
+  { key: "batch", name: t("changeDetection.batchMode"), desc: t("changeDetection.batchModeDesc"), icon: FolderOpened },
+]);
 
 const resolveUrl = (url) => {
   if (!url) return "";
@@ -219,16 +243,48 @@ const resolveUrl = (url) => {
   return `http://localhost:8000${url}`;
 };
 
-// ── 单图 ──
+// ── 上传入口 ──
+const handleUploadClick = (which) => {
+  if (getSession()) {
+    const refMap = { a: inputA, b: inputB, folderA, folderB };
+    refMap[which]?.value?.click();
+    return
+  }
+  requireLogin()
+};
+
+// ── 单图（不再重复检查登录）──
+const setPreview = async (f, which) => {
+  const isTif = f.name.toLowerCase().endsWith('.tif') || f.name.toLowerCase().endsWith('.tiff')
+  if (isTif) {
+    const fd = new FormData()
+    fd.append('file', f)
+    try {
+      const previewRes = await previewImage(fd)
+      if (previewRes.success) {
+        const url = resolveUrl(previewRes.data.preview_url)
+        if (which === 'A') singleImgA.value = url
+        else singleImgB.value = url
+      } else {
+        if (which === 'A') singleImgA.value = ''
+        else singleImgB.value = ''
+      }
+    } catch { /* 预览失败不影响检测 */ }
+  } else {
+    if (which === 'A') singleImgA.value = URL.createObjectURL(f)
+    else singleImgB.value = URL.createObjectURL(f)
+  }
+}
+
 const handleFileSingle = async (event, which) => {
   const f = event.target.files[0];
   if (!f) return;
-  if (!(await requireLogin())) { event.target.value = ""; return; }
-  if (which === "A") { fileA.value = f; fileAName.value = f.name; singleImgA.value = URL.createObjectURL(f); }
-  else { fileB.value = f; fileBName.value = f.name; singleImgB.value = URL.createObjectURL(f); }
+  event.target.value = "";
+
+  if (which === "A") { fileA.value = f; fileAName.value = f.name; setPreview(f, 'A'); }
+  else { fileB.value = f; fileBName.value = f.name; setPreview(f, 'B'); }
 
   if (fileA.value && fileB.value) runSingleDetection();
-  event.target.value = "";
 };
 
 const runSingleDetection = async () => {
@@ -246,16 +302,13 @@ const runSingleDetection = async () => {
       singleImgB.value = resolveUrl(res.data.image_b_url);
     }
   } catch (e) {
-    ElMessage.error("检测失败");
+    ElMessage.error(t("changeDetection.detectFailed"));
   } finally { loading.value = false; }
 };
 
 const resetSingle = () => {
   fileA.value = null; fileB.value = null;
-  fileAName.value = ""; fileBName.value = "";
-  singleImgA.value = ""; singleImgB.value = "";
-  singleResultUrl.value = "";
-  singleResult.value = null;
+  store.resetSingle();
 };
 
 const downloadResult = async (url) => {
@@ -270,9 +323,9 @@ const downloadResult = async (url) => {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(blobUrl);
-    ElMessage.success("下载成功");
+    ElMessage.success(t("changeDetection.downloadSuccess"));
   } catch (e) {
-    ElMessage.error("下载失败");
+    ElMessage.error(t("changeDetection.downloadFailed"));
   }
 };
 
@@ -280,12 +333,12 @@ const downloadResult = async (url) => {
 const handleFolder = async (event, which) => {
   const files = Array.from(event.target.files).filter(f => /\.(jpg|jpeg|png|bmp|tif|tiff)$/i.test(f.name));
   files.sort((a, b) => a.name.localeCompare(b.name));
-  if (!(await requireLogin())) { event.target.value = ""; return; }
+  event.target.value = "";
+
   if (which === "A") { filesAList.value = files; folderACount.value = files.length; }
   else { filesBList.value = files; folderBCount.value = files.length; }
 
   if (filesAList.value.length && filesBList.value.length) runBatchDetection();
-  event.target.value = "";
 };
 
 const runBatchDetection = async () => {
@@ -298,6 +351,7 @@ const runBatchDetection = async () => {
       file_a: filesAList.value[i],
       file_b: filesBList.value[i],
       done: false, result_url: "", change_ratio: 0,
+      detection_id: "",
     });
   }
   batchDone.value = 0;
@@ -316,6 +370,7 @@ const runBatchDetection = async () => {
         batchPairs.value[i].done = true;
         batchPairs.value[i].result_url = resolveUrl(res.data.result_url);
         batchPairs.value[i].change_ratio = res.data.change_ratio;
+        batchPairs.value[i].detection_id = res.data.detection_id;
       }
     } catch (e) { /* skip failed */ }
     batchDone.value = i + 1;
@@ -327,31 +382,25 @@ const runBatchDetection = async () => {
 };
 
 const downloadBatchResults = async () => {
-  const urls = batchPairs.value.filter(f => f.done && f.result_url).map(f => f.result_url);
-  if (!urls.length) { ElMessage.error("没有可下载的结果图"); return; }
+  const ids = batchPairs.value.filter(f => f.detection_id).map(f => f.detection_id);
+  if (!ids.length) { ElMessage.error(t("changeDetection.noResults")); return; }
   try {
-    const blobs = await Promise.all(urls.map(url => fetch(url).then(r => r.blob())));
-    // single-file download for each — zip would need a library, so download sequentially
-    for (let i = 0; i < blobs.length; i++) {
-      const item = batchPairs.value.find(f => f.result_url === urls[i]);
-      const name = item ? `change_${item.filename_a}_${item.filename_b}.jpg` : `result_${i}.jpg`;
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blobs[i]);
-      a.download = name;
-      document.body.appendChild(a); a.click(); document.body.removeChild(a);
-      if (i < blobs.length - 1) await new Promise(r => setTimeout(r, 200));
-    }
-    ElMessage.success(`已下载 ${blobs.length} 张结果图`);
+    const blob = await downloadChangeResultsZip(ids);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `change_detection_results_${Date.now()}.zip`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    ElMessage.success(t("changeDetection.downloadedN", { n: ids.length }));
   } catch (e) {
-    ElMessage.error("批量下载失败");
+    ElMessage.error(t("changeDetection.batchDownloadFailed"));
   }
 };
 
 const resetBatch = () => {
-  batchPairs.value = [];
-  batchDone.value = 0;
-  folderACount.value = 0; folderBCount.value = 0;
   filesAList.value = []; filesBList.value = [];
+  store.resetBatch();
 };
 
 // ── 模型 ──
@@ -361,7 +410,7 @@ onMounted(async () => {
     if (res.data && res.data.length) {
       availableModels.value = res.data;
       const loaded = res.data.find(m => m.loaded);
-      selectedModel.value = loaded ? loaded.key : res.data[0].key;
+      store.selectedModel = loaded ? loaded.key : res.data[0].key;
     }
   } catch (e) { /* defaults */ }
 });
@@ -370,7 +419,7 @@ const onModelChange = async (key) => {
   try {
     const res = await switchChangeModel(key);
     if (res.success) ElMessage.success(res.message);
-  } catch (e) { ElMessage.error("模型切换失败"); }
+  } catch (e) { ElMessage.error(t("changeDetection.modelSwitchFailed")); }
 };
 </script>
 

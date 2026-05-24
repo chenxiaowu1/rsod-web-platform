@@ -89,6 +89,22 @@ export const getUserProfile = () => {
   })
 }
 
+export const updateUserProfile = (data) => {
+  return request({
+    url: '/user/profile',
+    method: 'put',
+    data
+  })
+}
+
+export const changeUserPassword = (data) => {
+  return request({
+    url: '/user/password',
+    method: 'put',
+    data
+  })
+}
+
 // ── AI 问答 ──────────────────────────────────────
 export const askQuestion = (data) => {
   return request({
@@ -176,6 +192,22 @@ export const deleteChangeRecord = (id) => {
   })
 }
 
+export const downloadChangeResultsZip = (recordIds) => {
+  return request({
+    url: '/change-detection/download-results',
+    method: 'post',
+    data: { record_ids: recordIds },
+    responseType: 'blob'
+  })
+}
+
+export const getChangeDetail = (id) => {
+  return request({
+    url: `/change-detection/history/${id}`,
+    method: 'get'
+  })
+}
+
 // ── 视频流检测 ──────────────────────────────────────
 export const detectVideo = (data) => {
   return request({
@@ -199,6 +231,24 @@ export const switchVideoModel = (modelKey) => {
   })
 }
 
+export const saveCameraSession = (data) => {
+  return request({
+    url: '/video/camera-save',
+    method: 'post',
+    data,
+    timeout: 120000
+  })
+}
+
+export const detectVideoFrame = (base64Image, modelKey) => {
+  return request({
+    url: '/video/detect-frame',
+    method: 'post',
+    data: { image: base64Image, model_key: modelKey },
+    timeout: 30000
+  })
+}
+
 export const downloadVideo = (videoId) => {
   return request({
     url: `/video/download/${videoId}`,
@@ -206,3 +256,18 @@ export const downloadVideo = (videoId) => {
     responseType: 'blob'
   })
 }
+
+export const getVideoHistoryDetail = (id) => {
+  return request({
+    url: `/video/history/${id}`,
+    method: 'get'
+  })
+}
+
+export const deleteVideoRecord = (id) => {
+  return request({
+    url: `/video/history/${id}`,
+    method: 'delete'
+  })
+}
+
